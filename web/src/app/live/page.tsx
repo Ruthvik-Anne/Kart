@@ -40,8 +40,8 @@ function Card({ children, title }: { children: ReactNode; title?: string }) {
 function Button({ children, onClick, disabled }: { children: ReactNode; onClick: () => void; disabled?: boolean }) {
   return <button className={buttonClass} onClick={onClick} disabled={disabled}>{children}</button>;
 }
-function FormButton({ children }: { children: ReactNode }) {
-  return <button type="submit" className={buttonClass}>{children}</button>;
+function FormButton({ children, disabled }: { children: ReactNode; disabled?: boolean }) {
+  return <button type="submit" disabled={disabled} className={buttonClass}>{children}</button>;
 }
 
 export default function LiveWorkspace() {
@@ -222,6 +222,9 @@ export default function LiveWorkspace() {
           localStorage.removeItem('kart-live-session'); setCsrfToken(''); setSession(null);
         }}>{demoMode ? 'Switch identity' : 'Sign out'}</button></div>
     </header>
+    {!demoMode && <p role="status" className="mt-5 rounded-xl bg-[#fff2d7] px-4 py-3 text-sm">
+      Campus sign-in is active. KC transfers and paid actions are disabled until the payment integration is approved.
+    </p>}
     <nav className="my-7 flex flex-wrap gap-2" aria-label="Workspace sections">{sections.map(section =>
       <button key={section.id} className={`rounded-full px-4 py-2 text-xs font-bold ${tab === section.id ? 'bg-forest-800 text-white' : 'bg-white text-forest-800'}`}
         onClick={() => setTab(section.id)}>{section.label}</button>)}</nav>
@@ -269,7 +272,7 @@ export default function LiveWorkspace() {
           <div key={bid.id} className="mb-2 flex flex-wrap items-center gap-2 rounded-lg bg-forest-100 p-3 text-xs">
             <span>{bid.bidder_id.slice(0, 8)} · {bid.amount} KC · {bid.eta_minutes} min · {bid.note}
               {recommendations?.ranked.find(r => r.bid_id === bid.id) && ` · Score ${recommendations.ranked.find(r => r.bid_id === bid.id)?.score} (${recommendations.ranked.find(r => r.bid_id === bid.id)?.reason})`}</span>
-            <Button onClick={() => void run(`v1/tasks/${current.id}/bids/${bid.id}/accept`, {}, 'Worker assigned').then(() => void openTask(current))}>Accept</Button>
+            <Button disabled={!demoMode} onClick={() => void run(`v1/tasks/${current.id}/bids/${bid.id}/accept`, {}, 'Worker assigned').then(() => void openTask(current))}>Accept</Button>
             <Button onClick={() => void loadThread(current.id, bid.bidder_id)}>Private chat</Button>
           </div>)}<Button onClick={() => void openTask(current)}>Refresh bids</Button></div>}
         {current.status === 'open' && !mine(current) && <Button onClick={() => void loadThread(current.id, session.id)}>My proposal chat</Button>}
@@ -315,7 +318,7 @@ export default function LiveWorkspace() {
         <div className="flex gap-4 text-xs"><label><input type="checkbox" name="color" /> Colour</label>
           <label><input type="checkbox" name="duplex" /> Duplex</label><label><input type="checkbox" name="spiral" /> Spiral binding</label></div>
         <p className="text-xs text-muted">The PDF is stored privately by the backend and available only to you and the chosen shop.</p>
-        <FormButton>Submit print job</FormButton>
+        <FormButton disabled={!demoMode}>Submit print job</FormButton>
       </form></Card>
       <div className="grid content-start gap-5"><Card title="Your print jobs"><div className="grid gap-2">{printJobs.map(job =>
         <div key={job.id} className="rounded-xl border border-line p-3 text-sm"><strong>{job.file_name}</strong>
@@ -337,7 +340,7 @@ export default function LiveWorkspace() {
             {products.filter(product => product.store_id === store.id).map(product =>
               <div key={product.id} className="flex items-center justify-between gap-2 border-t border-line py-2 text-sm">
                 <span>{product.name} · {product.price} KC · {product.stock} left</span>
-                <Button disabled={product.stock < 1 || pending} onClick={() => void run('v1/orders', {
+                <Button disabled={!demoMode || product.stock < 1 || pending} onClick={() => void run('v1/orders', {
                   store_id: store.id, items: [{ product_id: product.id, quantity: 1 }], request_key: crypto.randomUUID(),
                 }, 'Order placed')}>Buy one</Button>
               </div>)}
@@ -406,10 +409,10 @@ export default function LiveWorkspace() {
           <h3 className="font-bold">{listing.title}</h3><p className="text-xs text-muted">{listing.amount} KC · {listing.status}</p>
           {listing.kind === 'rental' && <p className="text-xs text-muted">Per day · deposit {listing.deposit} KC · up to {listing.max_days} days</p>}
           <div className="mt-3 flex gap-2">{listing.kind === 'sale' && listing.status === 'active' && listing.seller_id !== session.id &&
-            <Button onClick={() => void run(`v1/listings/${listing.id}/reserve`, {}, 'KC reserved')}>Reserve</Button>}
+            <Button disabled={!demoMode} onClick={() => void run(`v1/listings/${listing.id}/reserve`, {}, 'KC reserved')}>Reserve</Button>}
           {listing.kind === 'rental' && listing.status === 'active' && listing.seller_id !== session.id &&
             <form className="flex gap-2" onSubmit={submit(`v1/listings/${listing.id}/rent`, form => ({ days: numeric(form, 'days') }), 'Rental reserved')}>
-              <input className={inputClass} name="days" type="number" min="1" max={listing.max_days} defaultValue="1" required /><FormButton>Rent</FormButton></form>}
+              <input className={inputClass} name="days" type="number" min="1" max={listing.max_days} defaultValue="1" required /><FormButton disabled={!demoMode}>Rent</FormButton></form>}
           {listing.kind === 'sale' && listing.status === 'reserved' && listing.buyer_id === session.id &&
             <Button onClick={() => void run(`v1/listings/${listing.id}/actions/confirm`, {}, 'Handover confirmed')}>Confirm handover</Button>}
           {listing.kind === 'sale' && listing.status === 'reserved' && listing.buyer_id === session.id &&
@@ -441,7 +444,7 @@ export default function LiveWorkspace() {
       <div className="grid gap-5"><Card title="Available services"><div className="grid gap-2 sm:grid-cols-2">{services.map(s =>
         <div key={s.id} className="rounded-xl border border-line p-3"><strong>{s.title}</strong>
           <p className="text-xs text-muted">{s.amount} KC · provider {s.provider_id.slice(0, 8)}</p>
-          {s.provider_id !== session.id && <div className="mt-2"><Button onClick={() => void run(`v1/services/${s.id}/book`, {}, 'Booking requested and KC reserved')}>Book service</Button></div>}
+          {s.provider_id !== session.id && <div className="mt-2"><Button disabled={!demoMode} onClick={() => void run(`v1/services/${s.id}/book`, {}, 'Booking requested and KC reserved')}>Book service</Button></div>}
         </div>)}{!services.length && <p className="text-sm text-muted">No services yet.</p>}</div></Card>
         <Card title="Bookings"><div className="grid gap-2">{bookings.map(booking =>
           <div key={booking.id} className="rounded-xl bg-forest-100 p-3 text-sm">
@@ -481,7 +484,7 @@ export default function LiveWorkspace() {
       <div className="grid content-start gap-5"><Card title="Campus events"><div className="grid gap-3 sm:grid-cols-2">{events.map(event =>
         <div key={event.id} className="rounded-xl border border-line p-4"><h3 className="font-bold">{event.title}</h3>
           <p className="my-2 text-xs text-muted">{new Date(event.starts_at * 1000).toLocaleString()} · {event.price} KC · {event.reserved_seats}/{event.capacity} seats</p>
-          <Button disabled={event.reserved_seats >= event.capacity} onClick={() => void run(`v1/events/${event.id}/register`, {}, 'Ticket issued')}>Register</Button>
+          <Button disabled={event.reserved_seats >= event.capacity || (!demoMode && event.price > 0)} onClick={() => void run(`v1/events/${event.id}/register`, {}, 'Ticket issued')}>Register</Button>
         </div>)}{!events.length && <p className="text-sm text-muted">No events published yet.</p>}</div></Card>
         <Card title="Your tickets"><div className="grid gap-2">{tickets.map(ticket => <div key={ticket.id} className="rounded-lg bg-forest-100 p-3 text-sm">
           <strong>{ticket.title}</strong> · {ticket.status}<p className="mt-1 break-all font-mono text-xs">Ticket {ticket.id} · code {ticket.code}</p>

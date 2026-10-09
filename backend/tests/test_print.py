@@ -3,6 +3,7 @@ import os
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 from app.database import Database
 from app.print_jobs import PrintService
@@ -11,6 +12,9 @@ from app.service import DomainError
 
 class PrintTests(unittest.TestCase):
     def setUp(self):
+        demo = patch.dict(os.environ, {"KART_DEMO_MODE": "1"})
+        demo.start()
+        self.addCleanup(demo.stop)
         self.tmp = tempfile.TemporaryDirectory()
         os.environ["KART_SESSION_SECRET"] = "print-test-secret-at-least-32-characters"
         os.environ["KART_UPLOAD_DIR"] = self.tmp.name + "/uploads"

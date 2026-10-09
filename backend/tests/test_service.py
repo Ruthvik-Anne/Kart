@@ -2,6 +2,7 @@ import os
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 from app.database import Database
 from app.ledger import LedgerError, balance, post, reserve, wallet
@@ -11,6 +12,9 @@ from app.service import DomainError, KartService
 
 class ServiceTests(unittest.TestCase):
     def setUp(self):
+        demo = patch.dict(os.environ, {"KART_DEMO_MODE": "1"})
+        demo.start()
+        self.addCleanup(demo.stop)
         self.tmp = tempfile.TemporaryDirectory()
         self.service = KartService(Database(os.path.join(self.tmp.name, "test.db")))
         with self.service.database.transaction() as db:
@@ -126,6 +130,13 @@ class ServiceTests(unittest.TestCase):
             with self.assertRaises(LedgerError):
                 post(db, key="a", kind="demo", ref="poster", debit="demo:issuer", credit=wallet("poster"), amount=30)
         self.assertEqual(self.service.wallet("poster")["available"], 20)
+
+    def test_kc_is_closed_outside_demo_mode(self):
+        with patch.dict(os.environ, {"KART_DEMO_MODE": "0"}), self.service.database.transaction() as db:
+            with self.assertRaisesRegex(LedgerError, "disabled"):
+                post(db, key="disabled", kind="demo", ref="poster", debit="demo:issuer",
+                     credit=wallet("poster"), amount=20)
+        self.assertEqual(self.service.wallet("poster")["available"], 0)
 
     def test_signed_session_tampering_and_expiry(self):
         token = sign("poster", "x" * 32)

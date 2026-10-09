@@ -2,6 +2,7 @@ import os
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 from concurrent.futures import ThreadPoolExecutor
 
 from app.database import Database
@@ -12,6 +13,9 @@ from app.service import DomainError
 
 class MarketTests(unittest.TestCase):
     def setUp(self):
+        demo = patch.dict(os.environ, {"KART_DEMO_MODE": "1"})
+        demo.start()
+        self.addCleanup(demo.stop)
         os.environ["KART_SESSION_SECRET"] = "test-secret-with-more-than-32-characters"
         self.tmp = tempfile.TemporaryDirectory()
         self.s = MarketService(Database(os.path.join(self.tmp.name, "kart.db")))

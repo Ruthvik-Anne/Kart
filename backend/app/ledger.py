@@ -34,7 +34,7 @@ def balance(db: sqlite3.Connection, account: str) -> int:
 
 
 def post(db: sqlite3.Connection, *, key: str, kind: str, ref: str, debit: str, credit: str, amount: int) -> str:
-    if os.getenv("KART_DISABLE_KC") == "1":
+    if os.getenv("KART_DEMO_MODE") != "1" or os.getenv("KART_DISABLE_KC") == "1":
         raise LedgerError("KC transactions are disabled until payment integration is approved")
     if not isinstance(amount, int) or isinstance(amount, bool) or amount <= 0 or amount > 10_000_000:
         raise LedgerError("Invalid KC amount")
