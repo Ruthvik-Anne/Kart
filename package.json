@@ -1,0 +1,10 @@
+{
+  "name": "kart-campus-demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node dev-server.mjs",
+    "start": "node dev-server.mjs",
+    "test": "node smoke-test.mjs"
+  }
+}
