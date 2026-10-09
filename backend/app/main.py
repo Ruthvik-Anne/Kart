@@ -5,7 +5,7 @@ import logging
 import time
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
@@ -341,8 +341,8 @@ def provision_organization(data: AdminOrganizationIn, user_id: str = Depends(cur
 
 
 @app.get("/v1/admin/users")
-def admin_users(user_id: str = Depends(current_user)):
-    return call(service.admin_users, user_id)
+def admin_users(q: str = Query(default="", max_length=80), user_id: str = Depends(current_user)):
+    return call(service.admin_users, user_id, q)
 
 
 @app.post("/v1/admin/users/{target_id}/suspension")

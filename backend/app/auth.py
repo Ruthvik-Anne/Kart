@@ -10,6 +10,7 @@ import json
 import os
 import secrets
 import time
+from functools import lru_cache
 from urllib.parse import urlencode, urlparse
 from uuid import uuid4
 
@@ -60,6 +61,11 @@ def _secure() -> bool:
     return os.getenv("KART_COOKIE_SECURE", "1") != "0"
 
 
+@lru_cache(maxsize=8)
+def _jwks(url: str):
+    return jwt.PyJWKClient(url, timeout=5, lifespan=300)
+
+
 def start(database):
     config = _config()
     state, nonce, verifier = secrets.token_urlsafe(32), secrets.token_urlsafe(32), secrets.token_urlsafe(48)
@@ -99,7 +105,7 @@ def callback(database, request: Request, code: str, state: str):
         }, timeout=5)
         token_response.raise_for_status()
         id_token = token_response.json()["id_token"]
-        key = jwt.PyJWKClient(config["KART_OIDC_JWKS_URL"], timeout=5).get_signing_key_from_jwt(id_token)
+        key = _jwks(config["KART_OIDC_JWKS_URL"]).get_signing_key_from_jwt(id_token)
         claims = jwt.decode(id_token, key.key, algorithms=["RS256"],
                             audience=config["KART_OIDC_CLIENT_ID"], issuer=config["KART_OIDC_ISSUER"],
                             options={"require": ["exp", "iat", "iss", "sub", "aud"]})
@@ -107,6 +113,9 @@ def callback(database, request: Request, code: str, state: str):
         raise HTTPException(401, "Identity verification failed") from exc
     if not hmac.compare_digest(str(claims.get("nonce", "")), row["nonce"]):
         raise HTTPException(401, "Identity nonce mismatch")
+    audiences = claims.get("aud")
+    if isinstance(audiences, list) and len(audiences) > 1 and claims.get("azp") != config["KART_OIDC_CLIENT_ID"]:
+        raise HTTPException(401, "Invalid authorized party")
     email = claims.get("email", "")
     if claims.get("email_verified") is not True or not isinstance(email, str):
         raise HTTPException(403, "Verified campus email required")

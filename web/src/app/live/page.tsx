@@ -49,6 +49,7 @@ export default function LiveWorkspace() {
   const [loaded, setLoaded] = useState(false);
   const [demoMode, setDemoMode] = useState<boolean | null>(null);
   const [campusUsers, setCampusUsers] = useState<{ id: string; name: string; verified: number }[]>([]);
+  const [userQuery, setUserQuery] = useState('');
   const [tab, setTab] = useState<Tab>('tasks');
   const [notice, setNotice] = useState('');
   const [pending, setPending] = useState(false);
@@ -118,10 +119,13 @@ export default function LiveWorkspace() {
   }, [refresh]);
 
   useEffect(() => {
+    let active = true;
     if (session?.role === 'campus_admin' || session?.role === 'platform_admin') {
-      void backend<{ id: string; name: string; verified: number }[]>('v1/admin/users', session.token).then(setCampusUsers).catch(() => setCampusUsers([]));
+      void backend<{ id: string; name: string; verified: number }[]>(`v1/admin/users?q=${encodeURIComponent(userQuery)}`, session.token)
+        .then(users => { if (active) setCampusUsers(users); }).catch(() => { if (active) setCampusUsers([]); });
     }
-  }, [session]);
+    return () => { active = false; };
+  }, [session, userQuery]);
 
   async function run<T>(path: string, input: unknown, success = 'Saved'): Promise<T | undefined> {
     if (!session || pending) return;
@@ -164,7 +168,7 @@ export default function LiveWorkspace() {
 
   if (!loaded) return null;
   if (!session) return <main className="mx-auto max-w-xl px-5 py-16">
-    <a href="/login" className="text-sm text-forest-800">← Existing prototype</a>
+    {demoMode && <a href="/login" className="text-sm text-forest-800">← Existing prototype</a>}
     <h1 className="mt-8 font-display text-4xl font-extrabold">KART connected workspace</h1>
     <p className="mt-3 text-sm text-muted">Persistent campus workflows through the FastAPI backend. Demo identities and KC have no monetary value.</p>
     {demoMode === false && <div className="mt-8 rounded-2xl bg-white p-6 shadow-sm">
@@ -209,7 +213,7 @@ export default function LiveWorkspace() {
   };
   return <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
     <header className="flex flex-wrap items-center justify-between gap-4">
-      <div><a href="/login" className="text-xs text-forest-700">← Prototype</a>
+      <div>{demoMode && <a href="/login" className="text-xs text-forest-700">← Prototype</a>}
         <h1 className="font-display text-3xl font-extrabold tracking-tight">KART · Live workspace</h1>
         <p className="text-xs text-muted">{session.name} · {session.campus} · demo KC only</p></div>
       <div className="flex items-center gap-3"><strong className="rounded-xl bg-forest-100 px-4 py-2 text-sm">{balance.available} KC</strong>
@@ -347,7 +351,9 @@ export default function LiveWorkspace() {
           <select className={inputClass} name="type"><option value="canteen">Canteen</option><option value="xerox">Xerox</option><option value="stationery">Stationery</option><option value="merch">Custom merchandise</option></select>
           <FormButton>Create shop</FormButton></form></Card>}
         {!demoMode && ['campus_admin', 'platform_admin'].includes(session.role ?? '') &&
-          <Card title="Approve a campus shop"><form className="grid gap-2" onSubmit={submit('v1/admin/organizations', form => ({
+          <Card title="Approve a campus shop"><input className={inputClass} value={userQuery}
+            onChange={event => setUserQuery(event.target.value)} placeholder="Search verified students by name" aria-label="Search campus students" />
+            <form className="mt-2 grid gap-2" onSubmit={submit('v1/admin/organizations', form => ({
             owner_id: field(form, 'owner'), name: field(form, 'name'), type: 'vendor', store_type: field(form, 'type'),
           }), 'Shop approved')}>
             <select className={inputClass} name="owner" required><option value="">Select verified student owner</option>

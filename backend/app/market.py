@@ -128,14 +128,16 @@ class MarketService(KartService):
             self._audit(db, actor, "organization.provisioned", org_id)
             return {"organization_id": org_id, "store_id": store_id}
 
-    def admin_users(self, admin_id: str):
+    def admin_users(self, admin_id: str, query: str = ""):
         with self.database.connect() as db:
             actor = self._actor(db, admin_id)
             if actor["role"] not in ("campus_admin", "platform_admin"):
                 raise DomainError("Administrator required", 403)
+            escaped = query.strip().lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             return [dict(row) for row in db.execute(
-                "SELECT id,name,verified FROM users WHERE campus_id=? AND role='student' ORDER BY name,id LIMIT 500",
-                (actor["campus_id"],))]
+                """SELECT id,name,verified FROM users WHERE campus_id=? AND role='student'
+                   AND lower(name) LIKE ? ESCAPE '\\' ORDER BY name,id LIMIT 100""",
+                (actor["campus_id"], "%" + escaped + "%"))]
 
     def set_user_suspension(self, admin_id: str, target_id: str, suspended: bool):
         with self.database.transaction() as db:
