@@ -169,6 +169,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id,expires_at);
 """
+SCHEMA_VERSION = 1
 
 
 class Database:
@@ -176,7 +177,14 @@ class Database:
         self.path = path or os.getenv("KART_DB_PATH", "kart.db")
         with self.connect() as connection:
             connection.execute("PRAGMA journal_mode=WAL")
-            connection.executescript(SCHEMA)
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+            if version > SCHEMA_VERSION:
+                raise RuntimeError("Database schema is newer than this application")
+            if version == 0:
+                # The first migration is idempotent for databases created by the demo prototype.
+                # Later migrations must be appended as separate, numbered scripts.
+                connection.executescript("BEGIN IMMEDIATE;\n" + SCHEMA +
+                                         "\nPRAGMA user_version=1;\nCOMMIT;")
 
     @contextmanager
     def connect(self):

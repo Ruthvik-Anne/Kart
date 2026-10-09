@@ -43,3 +43,7 @@ jobs:
           npx --yes wait-on --timeout 120000 http://127.0.0.1:8000/health http://127.0.0.1:3100/login
           npm run test:e2e
           node e2e/live.mjs
+          KART_APP_MODE=campus npx next start -p 3101 &
+          npx --yes wait-on --timeout 30000 http://127.0.0.1:3101/live
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3101/login)" = 307
+          curl -sI http://127.0.0.1:3101/login | grep -iq 'location: .*\/live'
