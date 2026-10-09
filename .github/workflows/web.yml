@@ -25,6 +25,11 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: docker build -t kart-web-ci .
+      - name: Container smoke
+        run: |
+          docker run --name kart-web-ci -d -p 127.0.0.1:3201:3000 kart-web-ci
+          trap 'docker rm -f kart-web-ci' EXIT
+          npx --yes wait-on --timeout 30000 http://127.0.0.1:3201/live
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
