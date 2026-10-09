@@ -1,6 +1,8 @@
 """Campus-scoped task workflow and simulated funding invariants."""
 import sqlite3
 import time
+import hashlib
+import json
 from uuid import uuid4
 
 from .database import Database
@@ -44,9 +46,32 @@ class KartService:
 
     @staticmethod
     def _audit(db, actor, action, target):
+        event_id, now = _id(), int(time.time())
         db.execute("INSERT INTO audit_events VALUES (?,?,?,?,?,?)", (
-            _id(), actor["campus_id"], actor["id"], action, target, int(time.time()),
+            event_id, actor["campus_id"], actor["id"], action, target, now,
         ))
+        last = db.execute("SELECT event_hash FROM audit_chain ORDER BY sequence DESC LIMIT 1").fetchone()
+        previous = last["event_hash"] if last else "0" * 64
+        payload = [event_id, actor["campus_id"], actor["id"], action, target, now]
+        event_hash = hashlib.sha256((previous + json.dumps(payload, separators=(",", ":"))).encode()).hexdigest()
+        db.execute("INSERT INTO audit_chain(event_id,previous_hash,event_hash) VALUES (?,?,?)", (event_id, previous, event_hash))
+
+    def verify_audit(self, user_id: str):
+        with self.database.connect() as db:
+            actor = self._actor(db, user_id)
+            if actor["role"] not in ("campus_admin", "platform_admin"):
+                raise DomainError("Administrator required", 403)
+            previous, count = "0" * 64, 0
+            rows = db.execute("""SELECT c.*,e.campus_id,e.actor_id,e.action,e.target_id,e.created_at
+                FROM audit_chain c JOIN audit_events e ON e.id=c.event_id ORDER BY c.sequence""")
+            for row in rows:
+                payload = [row["event_id"], row["campus_id"], row["actor_id"], row["action"], row["target_id"], row["created_at"]]
+                expected = hashlib.sha256((previous + json.dumps(payload, separators=(",", ":"))).encode()).hexdigest()
+                if row["previous_hash"] != previous or row["event_hash"] != expected:
+                    return {"valid": False, "checked": count, "first_invalid_sequence": row["sequence"]}
+                previous, count = row["event_hash"], count + 1
+            total = db.execute("SELECT COUNT(*) FROM audit_events").fetchone()[0]
+            return {"valid": total == count, "checked": count, "head": previous}
 
     @staticmethod
     def _project(task, actor):

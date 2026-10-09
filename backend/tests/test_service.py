@@ -133,6 +133,15 @@ class ServiceTests(unittest.TestCase):
         self.assertIsNone(verify(token + "a", "x" * 32))
         self.assertIsNone(verify(sign("poster", "x" * 32, ttl=-1), "x" * 32))
 
+    def test_audit_chain_detects_changed_event(self):
+        self.task()
+        self.assertTrue(self.service.verify_audit("admin")["valid"])
+        with self.assertRaises(DomainError):
+            self.service.verify_audit("worker")
+        with self.service.database.transaction() as db:
+            db.execute("UPDATE audit_events SET action='tampered' WHERE action='task.created'")
+        self.assertFalse(self.service.verify_audit("admin")["valid"])
+
 
 if __name__ == "__main__":
     unittest.main()

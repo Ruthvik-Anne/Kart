@@ -37,6 +37,7 @@ python -m unittest discover -s tests -v
 | Services | Student offerings, funded booking, provider submission, buyer approval, cancellation and administrator dispute resolution. |
 | Events | Club events, capped registration, paid/free tickets and one-time organizer check-in. |
 | KC ledger | Paired append-only postings, derived balances, idempotency keys, atomic reserves/releases/refunds. Test grants have no monetary backing. |
+| Audit | Hash-linked event records with administrator verification. This detects changes to retained events; it is not an externally anchored blockchain. |
 
 ## Data and authorization boundaries
 

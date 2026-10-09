@@ -2,6 +2,7 @@ import os
 import tempfile
 import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 
 from app.database import Database
 from app.ledger import balance, organizer_payable, reserve, vendor_payable, wallet
@@ -69,6 +70,26 @@ class MarketTests(unittest.TestCase):
         with self.assertRaises(DomainError) as error:
             self.s.cancel_order("foreign", order["id"])
         self.assertEqual(error.exception.status, 404)
+
+    def test_concurrent_last_item_has_one_winner(self):
+        org, product = self.store()
+        with self.s.database.transaction() as db:
+            db.execute("UPDATE products SET stock=1 WHERE id=?", (product,))
+        self.s.demo_grant("other", 100, "other-stock-grant")
+
+        def purchase(user):
+            try:
+                return self.s.checkout(user, org["store_id"], [{"product_id": product, "quantity": 1}],
+                                       "last-item-" + user)["id"]
+            except DomainError:
+                return None
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(purchase, ["buyer", "other"]))
+        self.assertEqual(sum(result is not None for result in results), 1)
+        self.assertEqual(self.s.catalog("buyer")[0]["stock"], 0)
+        with self.s.database.connect() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM orders").fetchone()[0], 1)
 
     def test_sale_reservation_and_buyer_release(self):
         listing = self.s.create_listing("provider", {

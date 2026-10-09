@@ -51,6 +51,11 @@ CREATE TABLE IF NOT EXISTS audit_events (
   id TEXT PRIMARY KEY, campus_id TEXT NOT NULL, actor_id TEXT NOT NULL,
   action TEXT NOT NULL, target_id TEXT NOT NULL, created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS audit_chain (
+  sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+  event_id TEXT NOT NULL UNIQUE REFERENCES audit_events(id),
+  previous_hash TEXT NOT NULL, event_hash TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS organizations (
   id TEXT PRIMARY KEY, campus_id TEXT NOT NULL REFERENCES campuses(id),
   name TEXT NOT NULL, type TEXT NOT NULL CHECK(type IN ('vendor','club'))

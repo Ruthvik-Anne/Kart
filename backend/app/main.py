@@ -243,6 +243,11 @@ def wallet(user_id: str = Depends(current_user)):
     return call(service.wallet, user_id)
 
 
+@app.get("/v1/admin/audit/verify")
+def verify_audit(user_id: str = Depends(current_user)):
+    return call(service.verify_audit, user_id)
+
+
 @app.post("/dev/organizations", status_code=201, include_in_schema=False)
 def demo_organization(data: OrganizationIn, user_id: str = Depends(current_user)):
     return call(service.create_organization, user_id, data.name, data.type, data.store_type)
