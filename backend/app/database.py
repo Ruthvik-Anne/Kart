@@ -155,6 +155,19 @@ CREATE INDEX IF NOT EXISTS print_jobs_store_status ON print_jobs(store_id,status
 CREATE TABLE IF NOT EXISTS task_print_links (
   task_id TEXT PRIMARY KEY REFERENCES tasks(id), print_job_id TEXT NOT NULL REFERENCES print_jobs(id)
 );
+CREATE TABLE IF NOT EXISTS external_identities (
+  issuer TEXT NOT NULL, subject TEXT NOT NULL, user_id TEXT NOT NULL UNIQUE REFERENCES users(id),
+  email TEXT NOT NULL, PRIMARY KEY(issuer,subject)
+);
+CREATE TABLE IF NOT EXISTS auth_states (
+  state_hash TEXT PRIMARY KEY, verifier TEXT NOT NULL, nonce TEXT NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id),
+  csrf_token TEXT NOT NULL, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id,expires_at);
 """
 
 
@@ -162,7 +175,9 @@ class Database:
     def __init__(self, path: str | None = None):
         self.path = path or os.getenv("KART_DB_PATH", "kart.db")
         with self.connect() as connection:
+            connection.execute("PRAGMA journal_mode=WAL")
             connection.executescript(SCHEMA)
+            connection.execute("PRAGMA user_version=1")
 
     @contextmanager
     def connect(self):

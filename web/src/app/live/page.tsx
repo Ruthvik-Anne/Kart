@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { backend, type LiveSession } from '@/lib/backend';
+import { backend, setCsrfToken, type LiveSession } from '@/lib/backend';
 
 type Task = { id: string; title: string; description: string; category: string; budget: number; status: string; urgency: string; poster_id?: string; poster_alias?: string; assignee_id?: string; agreed_amount?: number; source_order?: { id: string; status: string; store_name: string } };
 type Bid = { id: string; bidder_id: string; amount: number; eta_minutes: number; note: string };
@@ -47,6 +47,8 @@ function FormButton({ children }: { children: ReactNode }) {
 export default function LiveWorkspace() {
   const [session, setSession] = useState<LiveSession | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [demoMode, setDemoMode] = useState<boolean | null>(null);
+  const [campusUsers, setCampusUsers] = useState<{ id: string; name: string }[]>([]);
   const [tab, setTab] = useState<Tab>('tasks');
   const [notice, setNotice] = useState('');
   const [pending, setPending] = useState(false);
@@ -84,16 +86,42 @@ export default function LiveWorkspace() {
   }, []);
 
   useEffect(() => {
-    const saved = localStorage.getItem('kart-live-session');
-    if (saved) {
+    let active = true;
+    void (async () => {
       try {
-        const value = JSON.parse(saved) as LiveSession;
-        setSession(value);
-        void refresh(value.token).catch(error => setNotice(String(error.message)));
-      } catch { localStorage.removeItem('kart-live-session'); }
-    }
-    setLoaded(true);
+        const health = await backend<{ demo_mode: boolean }>('health');
+        if (!active) return;
+        setDemoMode(health.demo_mode);
+        if (health.demo_mode) {
+          const saved = localStorage.getItem('kart-live-session');
+          if (saved) {
+            try {
+              const value = JSON.parse(saved) as LiveSession;
+              setSession(value);
+              await refresh(value.token ?? '');
+            } catch { localStorage.removeItem('kart-live-session'); }
+          }
+        } else {
+          localStorage.removeItem('kart-live-session');
+          try {
+            const value = await backend<LiveSession>('auth/session');
+            if (!active) return;
+            setCsrfToken(value.csrf ?? '');
+            setSession(value);
+            await refresh('');
+          } catch { /* Visitor can start campus sign-in below. */ }
+        }
+      } catch (error) { if (active) setNotice(error instanceof Error ? error.message : 'Backend unavailable'); }
+      finally { if (active) setLoaded(true); }
+    })();
+    return () => { active = false; };
   }, [refresh]);
+
+  useEffect(() => {
+    if (session?.role === 'campus_admin' || session?.role === 'platform_admin') {
+      void backend<{ id: string; name: string }[]>('v1/admin/users', session.token).then(setCampusUsers).catch(() => setCampusUsers([]));
+    }
+  }, [session]);
 
   async function run<T>(path: string, input: unknown, success = 'Saved'): Promise<T | undefined> {
     if (!session || pending) return;
@@ -139,6 +167,12 @@ export default function LiveWorkspace() {
     <a href="/login" className="text-sm text-forest-800">← Existing prototype</a>
     <h1 className="mt-8 font-display text-4xl font-extrabold">KART connected workspace</h1>
     <p className="mt-3 text-sm text-muted">Persistent campus workflows through the FastAPI backend. Demo identities and KC have no monetary value.</p>
+    {demoMode === false && <div className="mt-8 rounded-2xl bg-white p-6 shadow-sm">
+      <p className="mb-4 text-sm">Sign in using your verified campus account.</p>
+      <a className={buttonClass} href="/api/backend/auth/start">Sign in with campus</a>
+      {notice && <p role="status" className="mt-4 text-sm text-red-700">{notice}</p>}
+    </div>}
+    {demoMode !== false &&
     <form className="mt-8 grid gap-3 rounded-2xl bg-white p-6 shadow-sm" onSubmit={async event => {
       event.preventDefault(); setPending(true);
       try {
@@ -157,7 +191,7 @@ export default function LiveWorkspace() {
       <label className="text-xs font-bold">Campus code<input className={inputClass} name="campus" defaultValue="vr-siddhartha" required /></label>
       <button className={buttonClass} disabled={pending}>Enter demo workspace</button>
       {notice && <p role="status" className="text-sm text-red-700">{notice}</p>}
-    </form>
+    </form>}
   </main>;
 
   const mine = (task: Task) => task.poster_id === session.id;
@@ -165,7 +199,9 @@ export default function LiveWorkspace() {
   const myStores = orgs.filter(org => org.store_id);
   const clubs = orgs.filter(org => org.type === 'club');
   const downloadPrint = async (job: PrintJob) => {
-    const response = await fetch(`/api/backend/v1/print-jobs/${job.id}/file`, { headers: { Authorization: `Bearer ${session.token}` } });
+    const response = await fetch(`/api/backend/v1/print-jobs/${job.id}/file`, {
+      headers: session.token ? { Authorization: `Bearer ${session.token}` } : {},
+    });
     if (!response.ok) { setNotice('Could not open this document'); return; }
     const url = URL.createObjectURL(await response.blob());
     const link = document.createElement('a'); link.href = url; link.download = job.file_name; link.click();
@@ -177,7 +213,10 @@ export default function LiveWorkspace() {
         <h1 className="font-display text-3xl font-extrabold tracking-tight">KART · Live workspace</h1>
         <p className="text-xs text-muted">{session.name} · {session.campus} · demo KC only</p></div>
       <div className="flex items-center gap-3"><strong className="rounded-xl bg-forest-100 px-4 py-2 text-sm">{balance.available} KC</strong>
-        <button className="text-xs underline" onClick={() => { localStorage.removeItem('kart-live-session'); setSession(null); }}>Switch identity</button></div>
+        <button className="text-xs underline" onClick={() => {
+          if (!demoMode) void backend('auth/logout', undefined, {}).catch(() => setNotice('Sign out failed; retry.'));
+          localStorage.removeItem('kart-live-session'); setCsrfToken(''); setSession(null);
+        }}>{demoMode ? 'Switch identity' : 'Sign out'}</button></div>
     </header>
     <nav className="my-7 flex flex-wrap gap-2" aria-label="Workspace sections">{sections.map(section =>
       <button key={section.id} className={`rounded-full px-4 py-2 text-xs font-bold ${tab === section.id ? 'bg-forest-800 text-white' : 'bg-white text-forest-800'}`}
@@ -299,14 +338,23 @@ export default function LiveWorkspace() {
                 }, 'Order placed')}>Buy one</Button>
               </div>)}
             {!products.some(p => p.store_id === store.id) && <p className="text-xs text-muted">No items listed yet.</p>}
-          </div>)}{!stores.length && <p className="text-sm text-muted">No campus shops yet. Create one below to try the full order flow.</p>}
+          </div>)}{!stores.length && <p className="text-sm text-muted">No campus shops yet.</p>}
         </Card>
-        <Card title="Create a demo campus shop"><form className="grid gap-2" onSubmit={submit('dev/organizations', form => ({
+        {demoMode && <Card title="Create a demo campus shop"><form className="grid gap-2" onSubmit={submit('dev/organizations', form => ({
           name: field(form, 'name'), type: 'vendor', store_type: field(form, 'type'),
         }), 'Shop created')}>
           <input className={inputClass} name="name" placeholder="Shop name" minLength={2} required />
           <select className={inputClass} name="type"><option value="canteen">Canteen</option><option value="xerox">Xerox</option><option value="stationery">Stationery</option><option value="merch">Custom merchandise</option></select>
-          <FormButton>Create shop</FormButton></form></Card>
+          <FormButton>Create shop</FormButton></form></Card>}
+        {!demoMode && ['campus_admin', 'platform_admin'].includes(session.role ?? '') &&
+          <Card title="Approve a campus shop"><form className="grid gap-2" onSubmit={submit('v1/admin/organizations', form => ({
+            owner_id: field(form, 'owner'), name: field(form, 'name'), type: 'vendor', store_type: field(form, 'type'),
+          }), 'Shop approved')}>
+            <select className={inputClass} name="owner" required><option value="">Select verified student owner</option>
+              {campusUsers.map(user => <option key={user.id} value={user.id}>{user.name} · {user.id.slice(0, 8)}</option>)}</select>
+            <input className={inputClass} name="name" placeholder="Shop name" minLength={2} required />
+            <select className={inputClass} name="type"><option value="canteen">Canteen</option><option value="xerox">Xerox</option><option value="stationery">Stationery</option><option value="merch">Custom merchandise</option></select>
+            <FormButton>Approve shop</FormButton></form></Card>}
       </div>
       <div className="grid content-start gap-5"><Card title="Your shop management">
         {myStores.map(org => <div key={org.id} className="mb-4 rounded-xl bg-forest-100 p-3">
@@ -394,10 +442,16 @@ export default function LiveWorkspace() {
     </div>}
 
     {tab === 'events' && <div className="grid gap-5 lg:grid-cols-[1fr_2fr]">
-      <div className="grid content-start gap-5"><Card title="Organize an event"><p className="mb-3 text-xs text-muted">Create a demo club, then publish an event.</p>
-        <form className="mb-4 flex gap-2" onSubmit={submit('dev/organizations', form => ({
+      <div className="grid content-start gap-5"><Card title="Organize an event">
+        {demoMode && <form className="mb-4 flex gap-2" onSubmit={submit('dev/organizations', form => ({
           name: field(form, 'name'), type: 'club', store_type: null,
-        }), 'Club created')}><input className={inputClass} name="name" minLength={2} placeholder="Club name" required /><FormButton>Create club</FormButton></form>
+        }), 'Club created')}><input className={inputClass} name="name" minLength={2} placeholder="Club name" required /><FormButton>Create club</FormButton></form>}
+        {!demoMode && ['campus_admin', 'platform_admin'].includes(session.role ?? '') &&
+          <form className="mb-4 grid gap-2" onSubmit={submit('v1/admin/organizations', form => ({
+            owner_id: field(form, 'owner'), name: field(form, 'name'), type: 'club', store_type: null,
+          }), 'Club approved')}><select className={inputClass} name="owner" required><option value="">Select verified organizer</option>
+            {campusUsers.map(user => <option key={user.id} value={user.id}>{user.name} · {user.id.slice(0, 8)}</option>)}</select>
+            <input className={inputClass} name="name" minLength={2} placeholder="Club name" required /><FormButton>Approve club</FormButton></form>}
         {clubs.map(club => <form key={club.id} className="mb-4 grid gap-2 border-t border-line pt-3" onSubmit={submit(`v1/organizations/${club.id}/events`, form => ({
           title: field(form, 'title'), description: field(form, 'description'),
           starts_at: dateSeconds(form, 'starts'), capacity: numeric(form, 'capacity'), price: numeric(form, 'price'),
@@ -434,7 +488,7 @@ export default function LiveWorkspace() {
         <p className="text-3xl font-extrabold">{balance.available} <span className="text-base">KC available</span></p>
         <p className="mt-1 text-sm text-muted">{balance.reserved} KC committed to your tasks</p>
         <p className="mt-4 text-xs text-muted">This is test data. No rupees, bank funds, wallet authorization, or payouts are attached.</p>
-        <div className="mt-4"><Button onClick={() => void run('dev/kc-grants', { amount: 500, key: crypto.randomUUID() }, '500 test KC added')}>Add 500 demo KC</Button></div>
+        {demoMode && <div className="mt-4"><Button onClick={() => void run('dev/kc-grants', { amount: 500, key: crypto.randomUUID() }, '500 test KC added')}>Add 500 demo KC</Button></div>}
       </Card></div>
       <Card title="Your orders"><div className="grid gap-3">{orders.map(order => <div key={order.id} className="rounded-xl border border-line p-4">
         <div className="flex justify-between gap-3"><strong>{order.items.map(item => `${item.name} ×${item.quantity}`).join(', ')}</strong><span>{order.amount} KC</span></div>
@@ -443,12 +497,12 @@ export default function LiveWorkspace() {
         {order.status === 'placed' && <div className="mt-2"><Button onClick={() => void run(`v1/orders/${order.id}/cancel`, {}, 'Order refunded')}>Cancel order</Button></div>}
       </div>)}{!orders.length && <p className="text-sm text-muted">No orders yet.</p>}</div></Card>
     </div>}
-    <footer className="mt-10 border-t border-line pt-5 text-xs text-muted">Connected demo backend · no real payment settlement or production identity</footer>
+    <footer className="mt-10 border-t border-line pt-5 text-xs text-muted">{demoMode ? 'Connected demo backend' : 'Verified campus identity'} · KC and payments remain simulation only</footer>
   </main>;
 }
 
 function ShopOrders({ storeId, token, run }: {
-  storeId: string; token: string;
+  storeId: string; token?: string;
   run: (path: string, input: unknown, success?: string) => Promise<unknown>;
 }) {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -466,7 +520,7 @@ function ShopOrders({ storeId, token, run }: {
 }
 
 function PrintQueue({ storeId, token, run }: {
-  storeId: string; token: string; run: (path: string, input: unknown, success?: string) => Promise<unknown>;
+  storeId: string; token?: string; run: (path: string, input: unknown, success?: string) => Promise<unknown>;
 }) {
   const [jobs, setJobs] = useState<PrintJob[]>([]);
   const load = useCallback(() => { void backend<PrintJob[]>(`v1/print-jobs?store_id=${storeId}`, token).then(setJobs).catch(() => setJobs([])); }, [storeId, token]);

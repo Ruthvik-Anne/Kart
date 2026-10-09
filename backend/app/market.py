@@ -2,6 +2,7 @@
 import hashlib
 import hmac
 import json
+import os
 import sqlite3
 import time
 from uuid import uuid4
@@ -28,7 +29,7 @@ def payment(db, **kwargs):
     try:
         return post(db, **kwargs)
     except LedgerError as exc:
-        raise DomainError(str(exc), 409) from exc
+        raise DomainError(str(exc), 503 if os.getenv("KART_DISABLE_KC") == "1" else 409) from exc
 
 
 class MarketService(KartService):
@@ -101,6 +102,40 @@ class MarketService(KartService):
                 ))
             self._audit(db, actor, "organization.created", org_id)
             return {"organization_id": org_id, "store_id": store_id}
+
+    def provision_organization(self, admin_id: str, owner_id: str, name: str,
+                               org_type: str, store_type: str | None = None):
+        """Approved onboarding; ordinary students cannot assign themselves store or club authority."""
+        with self.database.transaction() as db:
+            actor = self._actor(db, admin_id)
+            if actor["role"] not in ("campus_admin", "platform_admin"):
+                raise DomainError("Administrator required", 403)
+            owner = db.execute("SELECT * FROM users WHERE id=? AND campus_id=?", (
+                owner_id, actor["campus_id"])).fetchone()
+            if not owner or owner["role"] != "student" or not owner["verified"]:
+                raise DomainError("Verified owner in this campus required", 403)
+            if org_type not in ("vendor", "club") or (org_type == "vendor") != bool(store_type):
+                raise DomainError("Invalid organization type")
+            if store_type and store_type not in ("canteen", "xerox", "stationery", "merch"):
+                raise DomainError("Invalid store type")
+            org_id, store_id = uid(), None
+            db.execute("INSERT INTO organizations VALUES (?,?,?,?)", (org_id, actor["campus_id"], name, org_type))
+            db.execute("INSERT INTO memberships VALUES (?,?,?)", (owner_id, org_id, "owner"))
+            if store_type:
+                store_id = uid()
+                db.execute("INSERT INTO stores VALUES (?,?,?,?,?,?)", (
+                    store_id, actor["campus_id"], org_id, name, store_type, 1))
+            self._audit(db, actor, "organization.provisioned", org_id)
+            return {"organization_id": org_id, "store_id": store_id}
+
+    def admin_users(self, admin_id: str):
+        with self.database.connect() as db:
+            actor = self._actor(db, admin_id)
+            if actor["role"] not in ("campus_admin", "platform_admin"):
+                raise DomainError("Administrator required", 403)
+            return [dict(row) for row in db.execute(
+                "SELECT id,name FROM users WHERE campus_id=? AND role='student' AND verified=1 ORDER BY name,id LIMIT 500",
+                (actor["campus_id"],))]
 
     def organizations(self, user_id: str):
         with self.database.connect() as db:

@@ -3,6 +3,7 @@ import sqlite3
 import time
 import hashlib
 import json
+import os
 from uuid import uuid4
 
 from .database import Database
@@ -234,7 +235,7 @@ class KartService:
                 post(db, key=f"task:{task_id}:reserve", kind="task_reserve", ref=task_id,
                      debit=wallet(user_id), credit=reserve(task_id), amount=bid["amount"])
             except LedgerError as exc:
-                raise DomainError(str(exc), 409) from exc
+                raise DomainError(str(exc), 503 if os.getenv("KART_DISABLE_KC") == "1" else 409) from exc
             db.execute("UPDATE tasks SET status='assigned',assignee_id=?,agreed_amount=? WHERE id=?",
                        (worker["id"], bid["amount"], task_id))
             self._audit(db, actor, "task.assigned", task_id)

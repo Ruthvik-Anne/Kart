@@ -3,7 +3,7 @@ type Context = { params: Promise<{ path: string[] }> };
 
 async function forward(request: Request, { params }: Context): Promise<Response> {
   const { path } = await params;
-  if (!path.length || !['v1', 'dev', 'health'].includes(path[0]) ||
+  if (!path.length || !['v1', 'dev', 'health', 'auth'].includes(path[0]) ||
       path.some(part => !/^[a-zA-Z0-9_-]+$/.test(part))) {
     return Response.json({ detail: 'Invalid API path' }, { status: 400 });
   }
@@ -16,13 +16,20 @@ async function forward(request: Request, { params }: Context): Promise<Response>
       method: request.method, body, cache: 'no-store',
       headers: {
         ...(request.headers.get('authorization') ? { authorization: request.headers.get('authorization')! } : {}),
+        ...(request.headers.get('cookie') ? { cookie: request.headers.get('cookie')! } : {}),
+        ...(request.headers.get('x-kart-csrf') ? { 'x-kart-csrf': request.headers.get('x-kart-csrf')! } : {}),
         ...(body ? { 'content-type': 'application/json' } : {}),
       },
+      redirect: 'manual',
     });
+    const headers = new Headers({ 'content-type': response.headers.get('content-type') ?? 'application/json',
+      'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+    const location = response.headers.get('location');
+    if (location) headers.set('location', location);
+    for (const cookie of response.headers.getSetCookie()) headers.append('set-cookie', cookie);
     return new Response(await response.arrayBuffer(), {
       status: response.status,
-      headers: { 'content-type': response.headers.get('content-type') ?? 'application/json', 'cache-control': 'no-store',
-        'x-content-type-options': 'nosniff' },
+      headers,
     });
   } catch {
     return Response.json({ detail: 'KART backend is unavailable' }, { status: 502 });

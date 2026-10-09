@@ -44,9 +44,10 @@ class PrintService(MarketService):
         amount = sheets * data["copies"] * (8 if data["color"] else 2) + (30 if data["spiral"] else 0)
         job_id = uid()
         directory = Path(os.getenv("KART_UPLOAD_DIR", "private-uploads"))
-        directory.mkdir(parents=True, exist_ok=True)
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        directory.chmod(0o700)
         target = directory / (job_id + ".pdf")
-        with target.open("xb") as file:
+        with os.fdopen(os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600), "wb") as file:
             file.write(raw)
         try:
             with self.database.transaction() as db:
@@ -86,7 +87,10 @@ class PrintService(MarketService):
             if job["buyer_id"] != user_id:
                 store = self._store(db, actor, job["store_id"])
                 self._member(db, actor, store["organization_id"])
-            return Path(job["file_path"])
+            path = Path(job["file_path"])
+            if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != job["file_sha256"]:
+                raise DomainError("Document is unavailable", 404)
+            return path
 
     def advance_print(self, user_id: str, job_id: str, credential: str | None = None):
         with self.database.transaction() as db:

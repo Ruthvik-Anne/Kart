@@ -1,0 +1,42 @@
+# Single-instance deployment behind an HTTPS reverse proxy. See backend/README.md.
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      KART_DB_PATH: /data/kart.db
+      KART_UPLOAD_DIR: /data/uploads
+      KART_SESSION_SECRET: ${KART_SESSION_SECRET:?Required}
+      KART_DEMO_MODE: "0"
+      KART_DISABLE_KC: "1"
+      KART_OIDC_ISSUER: ${KART_OIDC_ISSUER:?Required}
+      KART_OIDC_AUTHORIZE_URL: ${KART_OIDC_AUTHORIZE_URL:?Required}
+      KART_OIDC_TOKEN_URL: ${KART_OIDC_TOKEN_URL:?Required}
+      KART_OIDC_JWKS_URL: ${KART_OIDC_JWKS_URL:?Required}
+      KART_OIDC_CLIENT_ID: ${KART_OIDC_CLIENT_ID:?Required}
+      KART_OIDC_CLIENT_SECRET: ${KART_OIDC_CLIENT_SECRET:?Required}
+      KART_OIDC_REDIRECT_URI: ${KART_OIDC_REDIRECT_URI:?Required}
+      KART_CAMPUS_DOMAINS: ${KART_CAMPUS_DOMAINS:?Required}
+      KART_BOOTSTRAP_ADMINS: ${KART_BOOTSTRAP_ADMINS:?Required}
+    volumes:
+      - kart_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+  web:
+    build:
+      context: ./web
+    restart: unless-stopped
+    environment:
+      KART_BACKEND_URL: http://backend:8000
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+volumes:
+  kart_data:

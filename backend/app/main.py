@@ -1,14 +1,17 @@
 """First API slice: real persistence for tasks, conversations, and simulated KC."""
 import os
+import hmac
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from .database import Database
+from . import auth
 from .market import MarketService
+from .ledger import LedgerError
 from .print_jobs import PrintService
 from .security import secret, sign, verify
 from .service import DomainError
@@ -64,6 +67,10 @@ class OrganizationIn(BaseModel):
     name: str = Field(min_length=2, max_length=100)
     type: str = Field(pattern="^(vendor|club)$")
     store_type: str | None = None
+
+
+class AdminOrganizationIn(OrganizationIn):
+    owner_id: str
 
 
 class ProductIn(BaseModel):
@@ -138,14 +145,19 @@ class PrintIn(BaseModel):
     spiral: bool = False
 
 
-def current_user(authorization: str = Header(default="")) -> str:
-    if os.getenv("KART_DEMO_MODE") != "1":
-        raise HTTPException(503, "Identity integration is not configured")
-    token = authorization.removeprefix("Bearer ") if authorization.startswith("Bearer ") else ""
-    user_id = verify(token, secret()) if token else None
-    if not user_id:
-        raise HTTPException(401, "Invalid or expired session")
-    return user_id
+def current_user(request: Request, authorization: str = Header(default="")) -> str:
+    if os.getenv("KART_DEMO_MODE") == "1":
+        token = authorization.removeprefix("Bearer ") if authorization.startswith("Bearer ") else ""
+        user_id = verify(token, secret()) if token else None
+        if not user_id:
+            raise HTTPException(401, "Invalid or expired session")
+        return user_id
+    active = auth.session(service.database, request)
+    if request.method not in ("GET", "HEAD", "OPTIONS") and not hmac.compare_digest(
+        request.headers.get("x-kart-csrf", ""), active["csrf_token"]
+    ):
+        raise HTTPException(403, "Invalid CSRF token")
+    return active["user_id"]
 
 
 def call(fn, *args, **kwargs):
@@ -153,16 +165,46 @@ def call(fn, *args, **kwargs):
         return fn(*args, **kwargs)
     except DomainError as exc:
         raise HTTPException(exc.status, str(exc)) from exc
+    except LedgerError as exc:
+        raise HTTPException(503, str(exc)) from exc
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "demo_mode": os.getenv("KART_DEMO_MODE") == "1"}
 
 
 @app.head("/health")
 def health_head():
     return None
+
+
+@app.get("/auth/start")
+def auth_start():
+    if os.getenv("KART_DEMO_MODE") == "1":
+        raise HTTPException(404, "Not found")
+    return auth.start(service.database)
+
+
+@app.get("/auth/callback")
+def auth_callback(request: Request, code: str, state: str):
+    if os.getenv("KART_DEMO_MODE") == "1":
+        raise HTTPException(404, "Not found")
+    return auth.callback(service.database, request, code, state)
+
+
+@app.get("/auth/session")
+def auth_session(request: Request):
+    if os.getenv("KART_DEMO_MODE") == "1":
+        raise HTTPException(404, "Not found")
+    row = auth.session(service.database, request)
+    return {"id": row["user_id"], "name": row["name"], "campus": row["campus_id"],
+            "role": row["role"], "csrf": row["csrf_token"]}
+
+
+@app.post("/auth/logout")
+def auth_logout(request: Request, user_id: str = Depends(current_user)):
+    return auth.logout(service.database, request)
 
 
 @app.post("/dev/users", status_code=201, include_in_schema=False)
@@ -255,7 +297,19 @@ def verify_audit(user_id: str = Depends(current_user)):
 
 @app.post("/dev/organizations", status_code=201, include_in_schema=False)
 def demo_organization(data: OrganizationIn, user_id: str = Depends(current_user)):
+    if os.getenv("KART_DEMO_MODE") != "1":
+        raise HTTPException(404, "Not found")
     return call(service.create_organization, user_id, data.name, data.type, data.store_type)
+
+
+@app.post("/v1/admin/organizations", status_code=201)
+def provision_organization(data: AdminOrganizationIn, user_id: str = Depends(current_user)):
+    return call(service.provision_organization, user_id, data.owner_id, data.name, data.type, data.store_type)
+
+
+@app.get("/v1/admin/users")
+def admin_users(user_id: str = Depends(current_user)):
+    return call(service.admin_users, user_id)
 
 
 @app.get("/v1/organizations/mine")
@@ -311,7 +365,8 @@ def print_jobs(store_id: str | None = None, user_id: str = Depends(current_user)
 @app.get("/v1/print-jobs/{job_id}/file")
 def print_file(job_id: str, user_id: str = Depends(current_user)):
     path = call(service.print_file, user_id, job_id)
-    return FileResponse(path, media_type="application/pdf", filename="print-job.pdf")
+    return FileResponse(path, media_type="application/pdf", filename="print-job.pdf",
+                        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
 
 
 @app.post("/v1/print-jobs/{job_id}/advance")
