@@ -47,7 +47,7 @@ export default function TaskBoard() {
       <div className="mb-5 flex flex-wrap items-center gap-3 text-xs">
         <select aria-label="Category" className={`${inputCls} max-w-[11rem]`} value={category} onChange={e => setCategory(e.target.value)}>{CATEGORIES.map(c => <option key={c}>{c}</option>)}</select>
         <input aria-label="Minimum budget in KC" type="number" min={0} className={`${inputCls} max-w-[9rem]`} placeholder="Min budget KC" value={minBudget} onChange={e => setMinBudget(e.target.value)} />
-        {me?.providerEnabled && <label className="flex items-center gap-2 font-bold text-[#55715b]"><input type="checkbox" checked={providerOnly} onChange={e => setProviderOnly(e.target.checked)} /> Only categories I&apos;ve worked in</label>}
+        {me?.providerEnabled && <label className="flex items-center gap-2 font-bold text-x55715b"><input type="checkbox" checked={providerOnly} onChange={e => setProviderOnly(e.target.checked)} /> Only categories I&apos;ve worked in</label>}
         <span className="ml-auto text-[11px] text-muted">Sorted by priority, highest first</span>
       </div>
       {ranked.length === 0 ? <Empty title="No tasks in this lane">Try another lane or loosen the filters.</Empty> : (

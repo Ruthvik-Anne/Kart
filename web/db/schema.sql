@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS campus_state (
 );
 
 CREATE TABLE IF NOT EXISTS accounts (
-  id uuid PRIMARY KEY,
+  id text PRIMARY KEY,
   campus_id text NOT NULL REFERENCES campus_state(campus_id),
   username text NOT NULL,
   password_hash text NOT NULL,
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS accounts (
 
 CREATE TABLE IF NOT EXISTS sessions (
   token_hash text PRIMARY KEY,
-  account_id uuid NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  account_id text NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
   expires_at timestamptz NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );

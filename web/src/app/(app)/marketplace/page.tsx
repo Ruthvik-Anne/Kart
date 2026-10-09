@@ -31,10 +31,10 @@ export default function Marketplace() {
           {browse.length === 0 ? <Empty title="Nothing listed right now">Be the first to list something.</Empty> : (
             <CardGrid>
               {browse.map(l => (
-                <article key={l.id} className="overflow-hidden rounded-2xl border border-line bg-white">
-                  <div className="grid h-28 place-items-center bg-gradient-to-br from-[#e8ecf4] to-[#f8f7ed] text-6xl" aria-hidden>{l.icon}</div>
+                <article key={l.id} className="overflow-hidden rounded-2xl border border-line bg-surface">
+                  <div className="grid h-28 place-items-center bg-gradient-to-br from-xe8ecf4 to-xf8f7ed text-6xl" aria-hidden>{l.icon}</div>
                   <div className="p-4">
-                    <div className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-[#5d8369]"><span>{k.user(l.sellerId)?.name}</span><Badge tone={l.kind === 'rent' ? 'blue' : 'green'}>{l.kind === 'rent' ? 'For rent' : l.condition}</Badge></div>
+                    <div className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-x5d8369"><span>{k.user(l.sellerId)?.name}</span><Badge tone={l.kind === 'rent' ? 'blue' : 'green'}>{l.kind === 'rent' ? 'For rent' : l.condition}</Badge></div>
                     <h3 className="mt-1.5 font-display text-base font-bold">{l.name}</h3>
                     <p className="min-h-8 text-[11px] text-muted">{l.desc}</p>
                     <div className="mt-3 flex items-center justify-between">
@@ -55,7 +55,7 @@ export default function Marketplace() {
             <h2 className="mb-3 font-display text-lg font-bold">My purchases & rentals</h2>
             {buying.length === 0 ? <Empty title="Nothing waiting for handover" /> : (
               <div className="grid gap-3">{buying.map(l => (
-                <div key={l.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-white p-4 text-xs">
+                <div key={l.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4 text-xs">
                   <div><b>{l.name}</b><div className="text-muted">From {k.user(l.sellerId)?.name} · {kc(l.amount ?? 0)} held{l.kind === 'rent' ? ` for ${l.days} day${l.days === 1 ? '' : 's'}` : ''}</div></div>
                   <div className="flex gap-2">
                     <Button size="sm" onClick={() => act(kart => kart.confirmHandover(me, l.id), 'Handover confirmed. Seller paid')}>I got it. Release payment</Button>
@@ -68,7 +68,7 @@ export default function Marketplace() {
             <h2 className="mb-3 font-display text-lg font-bold">My listings</h2>
             {selling.length === 0 ? <Empty title="You haven't listed anything" /> : (
               <div className="grid gap-3">{selling.map(l => (
-                <div key={l.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-white p-4 text-xs">
+                <div key={l.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4 text-xs">
                   <div><b>{l.name}</b> <Badge tone={l.status === 'sold' ? 'gray' : l.status === 'reserved' ? 'amber' : 'green'}>{l.status}</Badge>
                     <div className="text-muted">{kc(l.price)}{l.kind === 'rent' ? ' / day' : ''}{l.status === 'reserved' ? ` · reserved by ${k.user(l.buyerId ?? '')?.name}` : ''}</div></div>
                   <div className="flex gap-2">

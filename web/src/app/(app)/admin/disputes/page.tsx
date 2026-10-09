@@ -31,7 +31,7 @@ export default function Disputes() {
       <p className="text-xs text-muted">{resolved.length ? resolved.map(t => t.title).join(' · ') : 'None yet.'}</p>
       <h2 className="mb-3 mt-8 font-display text-lg font-bold">Admin access log</h2>
       <Card className="!p-3 text-xs">
-        {k.db.audit.length === 0 ? <span className="text-muted">No admin actions yet.</span> : k.db.audit.slice(0, 8).map(a => <div key={a.id} className="border-b border-[#eff2ed] py-1.5 last:border-0"><b>{k.user(a.actorId)?.name}</b> · {a.text}</div>)}
+        {k.db.audit.length === 0 ? <span className="text-muted">No admin actions yet.</span> : k.db.audit.slice(0, 8).map(a => <div key={a.id} className="border-b border-xeff2ed py-1.5 last:border-0"><b>{k.user(a.actorId)?.name}</b> · {a.text}</div>)}
       </Card>
     </>
   );

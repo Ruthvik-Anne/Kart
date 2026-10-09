@@ -27,5 +27,9 @@ Match (bid ranking, shown to the poster and as "Your match" to a provider):
 - Safeguards: 2,000 character limit, escaped plain-text rendering, a burst limit of 8 messages per 10 seconds, and a soft warning when a message looks like a phone number, email or WhatsApp/Telegram/Instagram handle.
 - Realtime: tabs sync through the `storage` event. The backend replaces this with a WebSocket at `/ws/threads/{key}` using the same message shape.
 
-## Not built yet
-Attachments, counter-offer quote messages, recurring/scheduled tasks and linked tasks (Phase 2 in the brief).
+## Built on top of the base threads
+- **Attachments**: metadata only (name, size); allow-list pdf/doc/docx/ppt/pptx/xls/xlsx/png/jpg/jpeg/txt, max 5 files, 10 MB each (`lib/attachments.ts`). File contents are not stored until a storage backend exists.
+- **Counter-offers**: `quote` messages (price + hours). Accepting updates the bid; older quotes become superseded.
+- **Scheduled and recurring tasks**: "start not before" time, and daily/weekly repeats (2-12 occurrences); the next one posts when the previous ends.
+- **Linked workflows**: 2-4 steps within 72 h total; each step is locked until the previous one completes.
+- **Reviews and notifications**: task, order and product reviews; notifications with read state and links.

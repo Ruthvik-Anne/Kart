@@ -8,9 +8,12 @@
     "start": "next start",
     "lint": "tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "node e2e/e2e.mjs && node e2e/features.mjs",
+    "test:e2e": "node e2e/e2e.mjs && node e2e/features.mjs && node e2e/retail.mjs",
     "test:all": "npm run lint && npm test",
-    "test:e2e:features": "node e2e/features.mjs"
+    "db:init": "tsx scripts/db.ts init",
+    "db:account": "tsx scripts/db.ts account",
+    "test:e2e:features": "node e2e/features.mjs",
+    "test:e2e:retail": "node e2e/retail.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

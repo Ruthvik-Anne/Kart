@@ -19,7 +19,7 @@ type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' 
 export function Button({ variant = 'primary', size = 'md', className, ...p }: BtnProps) {
   const v = {
     primary: 'bg-forest-800 text-white hover:bg-forest-950',
-    secondary: 'border border-[#dce7dc] bg-white text-forest-800 hover:bg-forest-100',
+    secondary: 'border border-xdce7dc bg-surface text-forest-800 hover:bg-forest-100',
     gold: 'bg-amber-kart text-forest-950 hover:brightness-95',
     danger: 'bg-red-700 text-white hover:bg-red-800',
   }[variant];
@@ -27,10 +27,10 @@ export function Button({ variant = 'primary', size = 'md', className, ...p }: Bt
 }
 
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
-  return <section className={cx('rounded-2xl border border-line bg-white p-5', className)}>{children}</section>;
+  return <section className={cx('rounded-2xl border border-line bg-surface p-5', className)}>{children}</section>;
 }
 
-const TONES = { green: 'bg-forest-100 text-[#3e7c45]', amber: 'bg-[#fff1d7] text-[#a66f1e]', blue: 'bg-[#eaf0fb] text-[#4972a9]', red: 'bg-[#fde8e8] text-[#b42318]', gray: 'bg-[#eef1ed] text-[#5d6f63]' };
+const TONES = { green: 'bg-forest-100 text-x3e7c45', amber: 'bg-xfff1d7 text-xa66f1e', blue: 'bg-xeaf0fb text-x4972a9', red: 'bg-xfde8e8 text-xb42318', gray: 'bg-xeef1ed text-x5d6f63' };
 export function Badge({ children, tone = 'green' }: { children: ReactNode; tone?: keyof typeof TONES }) {
   return <span className={cx('inline-block whitespace-nowrap rounded-md px-2 py-1 text-[10px] font-extrabold', TONES[tone])}>{children}</span>;
 }
@@ -39,7 +39,7 @@ export function PageHead({ kicker, title, sub, action }: { kicker: string; title
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <div className="text-[11px] font-extrabold uppercase tracking-widest text-[#5d8369]">{kicker}</div>
+        <div className="text-[11px] font-extrabold uppercase tracking-widest text-x5d8369">{kicker}</div>
         <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">{title}</h1>
         {sub && <p className="mt-1 text-sm text-muted">{sub}</p>}
       </div>
@@ -50,10 +50,10 @@ export function PageHead({ kicker, title, sub, action }: { kicker: string; title
 
 export function Stat({ label, value, note }: { label: string; value: ReactNode; note?: string }) {
   return (
-    <div className="rounded-2xl border border-line bg-white p-5">
+    <div className="rounded-2xl border border-line bg-surface p-5">
       <div className="text-[11px] text-muted">{label}</div>
       <div className="mt-1 font-display text-2xl font-bold">{value}</div>
-      {note && <div className="mt-0.5 text-[10px] font-bold text-[#6b9b70]">{note}</div>}
+      {note && <div className="mt-0.5 text-[10px] font-bold text-x6b9b70">{note}</div>}
     </div>
   );
 }
@@ -63,23 +63,23 @@ export const CardGrid = ({ children }: { children: ReactNode }) => <div classNam
 
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-dashed border-[#cbd9ce] p-8 text-center text-sm text-muted">
-      <strong className="mb-1 block font-display text-lg text-[#2b4c37]">{title}</strong>{children}
+    <div className="rounded-2xl border border-dashed border-xcbd9ce p-8 text-center text-sm text-muted">
+      <strong className="mb-1 block font-display text-lg text-x2b4c37">{title}</strong>{children}
     </div>
   );
 }
 
 export function Notice({ children, tone = 'amber' }: { children: ReactNode; tone?: 'amber' | 'red' | 'green' }) {
-  const t = { amber: 'border-[#f1ddb0] bg-[#fff5dc] text-[#806528]', red: 'border-red-200 bg-red-50 text-red-800', green: 'border-[#cfe6d2] bg-forest-100 text-[#2f6a41]' }[tone];
+  const t = { amber: 'border-xf1ddb0 bg-xfff5dc text-x806528', red: 'border-red-200 bg-red-50 text-red-800', green: 'border-xcfe6d2 bg-forest-100 text-x2f6a41' }[tone];
   return <div role="note" className={cx('mb-5 rounded-xl border px-4 py-3 text-xs leading-relaxed', t)}>{children}</div>;
 }
 
 export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: { id: T; label: string }[]; value: T; onChange: (v: T) => void }) {
   return (
-    <div role="tablist" className="mb-5 flex flex-wrap gap-1 border-b border-[#e1e9df]">
+    <div role="tablist" className="mb-5 flex flex-wrap gap-1 border-b border-xe1e9df">
       {tabs.map(t => (
         <button key={t.id} role="tab" aria-selected={value === t.id} onClick={() => onChange(t.id)}
-          className={cx('border-b-2 px-4 py-2.5 text-xs font-extrabold', value === t.id ? 'border-[#2e6a48] text-[#27543c]' : 'border-transparent text-[#77907b]')}>{t.label}</button>
+          className={cx('border-b-2 px-4 py-2.5 text-xs font-extrabold', value === t.id ? 'border-x2e6a48 text-x27543c' : 'border-transparent text-x77907b')}>{t.label}</button>
       ))}
     </div>
   );
@@ -105,7 +105,7 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
   }, [onClose]);
   return (
     <div className="fixed inset-0 z-40 grid place-items-center bg-[#0c261b99] p-4" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div ref={box} role="dialog" aria-modal="true" aria-label={title} className={cx('max-h-[90vh] w-full overflow-auto rounded-2xl bg-white shadow-2xl', wide ? 'max-w-2xl' : 'max-w-lg')}>
+      <div ref={box} role="dialog" aria-modal="true" aria-label={title} className={cx('max-h-[90vh] w-full overflow-auto rounded-2xl bg-surface shadow-2xl', wide ? 'max-w-2xl' : 'max-w-lg')}>
         <div className="flex items-center justify-between border-b border-line px-6 py-4">
           <h2 className="font-display text-xl font-bold">{title}</h2>
           <button data-close aria-label="Close dialog" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-xl border border-line text-lg">×</button>
@@ -117,9 +117,9 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
 }
 
 export function Field({ label, children, wide }: { label: string; children: ReactNode; wide?: boolean }) {
-  return <label className={cx('grid gap-1.5 text-[11px] font-extrabold text-[#55715b]', wide && 'sm:col-span-2')}>{label}{children}</label>;
+  return <label className={cx('grid gap-1.5 text-[11px] font-extrabold text-x55715b', wide && 'sm:col-span-2')}>{label}{children}</label>;
 }
-export const inputCls = 'w-full rounded-xl border border-[#dce7db] bg-white px-3 py-2.5 text-xs font-medium text-[#243b2d]';
+export const inputCls = 'w-full rounded-xl border border-xdce7db bg-surface px-3 py-2.5 text-xs font-medium text-x243b2d';
 
 /** Hide children unless the current user holds the permission (UX only; the mock layer enforces it too). */
 export function Can({ perm, resource, fallback = null, children }: { perm: Permission; resource?: Resource; fallback?: ReactNode; children: ReactNode }) {
@@ -128,7 +128,7 @@ export function Can({ perm, resource, fallback = null, children }: { perm: Permi
 }
 
 export function ScoreChip({ score, label, parts }: { score: number; label: string; parts: Record<string, number> }) {
-  const tone = score >= 70 ? 'bg-[#e3f3e6] text-[#2f7a45]' : score >= 45 ? 'bg-[#fff1d7] text-[#a66f1e]' : 'bg-[#eef1ed] text-[#5d6f63]';
+  const tone = score >= 70 ? 'bg-xe3f3e6 text-x2f7a45' : score >= 45 ? 'bg-xfff1d7 text-xa66f1e' : 'bg-xeef1ed text-x5d6f63';
   const detail = Object.entries(parts).map(([k, v]) => `${k} ${Math.round(v * 100)}%`).join(' · ');
   return (
     <span tabIndex={0} title={detail} aria-label={`${label} ${score} out of 100. ${detail}`} className={cx('inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-extrabold', tone)}>
@@ -142,7 +142,7 @@ export function Stepper({ steps }: { steps: { label: string; state: 'done' | 'cu
     <ol className="grid gap-2">
       {steps.map((s, i) => (
         <li key={i} className="flex items-center gap-3 text-xs">
-          <span className={cx('grid h-6 w-6 place-items-center rounded-full text-[10px] font-extrabold', s.state === 'done' ? 'bg-forest-800 text-white' : s.state === 'current' ? 'bg-amber-kart text-forest-950' : 'bg-[#eef1ed] text-[#8b9b8e]')}>{s.state === 'done' ? '✓' : i + 1}</span>
+          <span className={cx('grid h-6 w-6 place-items-center rounded-full text-[10px] font-extrabold', s.state === 'done' ? 'bg-forest-800 text-white' : s.state === 'current' ? 'bg-amber-kart text-forest-950' : 'bg-xeef1ed text-x8b9b8e')}>{s.state === 'done' ? '✓' : i + 1}</span>
           <span className={s.state === 'todo' ? 'text-muted' : 'font-bold'}>{s.label}</span>
           {s.note && <span className="ml-auto text-[10px] text-muted">{s.note}</span>}
         </li>
@@ -153,10 +153,10 @@ export function Stepper({ steps }: { steps: { label: string; state: 'done' | 'cu
 
 export function DataTable({ head, rows }: { head: string[]; rows: ReactNode[][] }) {
   return (
-    <div className="overflow-x-auto rounded-2xl border border-line bg-white">
+    <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
       <table className="w-full border-collapse text-xs">
-        <thead><tr>{head.map(h => <th key={h} className="bg-[#fafbf9] px-4 py-3 text-left text-[10px] font-extrabold uppercase tracking-wider text-[#8b9b8e]">{h}</th>)}</tr></thead>
-        <tbody>{rows.map((r, i) => <tr key={i} className="border-t border-[#eff2ed]">{r.map((c, j) => <td key={j} className="px-4 py-3 align-top">{c}</td>)}</tr>)}</tbody>
+        <thead><tr>{head.map(h => <th key={h} className="bg-xfafbf9 px-4 py-3 text-left text-[10px] font-extrabold uppercase tracking-wider text-x8b9b8e">{h}</th>)}</tr></thead>
+        <tbody>{rows.map((r, i) => <tr key={i} className="border-t border-xeff2ed">{r.map((c, j) => <td key={j} className="px-4 py-3 align-top">{c}</td>)}</tr>)}</tbody>
       </table>
     </div>
   );

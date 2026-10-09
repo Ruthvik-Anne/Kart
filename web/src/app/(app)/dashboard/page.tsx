@@ -38,7 +38,7 @@ export default function Dashboard() {
       </StatGrid>
       <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
         {MODULES.map(([href, icon, title, sub]) => (
-          <Link key={href} href={href} className="rounded-2xl border border-line bg-white p-5 transition hover:-translate-y-0.5 hover:shadow-lg">
+          <Link key={href} href={href} className="rounded-2xl border border-line bg-surface p-5 transition hover:-translate-y-0.5 hover:shadow-lg">
             <div className="mb-3 grid h-10 w-10 place-items-center rounded-xl bg-forest-100 text-xl" aria-hidden>{icon}</div>
             <strong className="block font-display text-[15px]">{title}</strong><span className="text-[11px] text-muted">{sub} →</span>
           </Link>
@@ -56,8 +56,8 @@ export default function Dashboard() {
               {[...working.map(t => ({ id: t.id, icon: '⚡', title: t.title, sub: `Task · ${t.status.replace('_', ' ')}`, end: <Link className="text-[11px] font-extrabold text-forest-800" href={`/tasks/${t.id}`}>Open →</Link> })),
                 ...orders.slice(0, 4).map(o => ({ id: o.id, icon: o.kind === 'print' ? '🖨️' : o.kind === 'food' ? '🍽️' : '📐', title: o.title, sub: `${o.id} · ${when(o.ts)}`, end: <Badge tone={o.status === 'Cancelled' ? 'red' : 'green'}>{o.status}</Badge> }))]
                 .map(r => (
-                  <div key={r.id} className="flex items-center gap-3 border-b border-[#eff2ed] p-3 last:border-0">
-                    <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#f0f5ec]" aria-hidden>{r.icon}</span>
+                  <div key={r.id} className="flex items-center gap-3 border-b border-xeff2ed p-3 last:border-0">
+                    <span className="grid h-9 w-9 place-items-center rounded-xl bg-xf0f5ec" aria-hidden>{r.icon}</span>
                     <div className="min-w-0 flex-1"><b className="block truncate text-xs">{r.title}</b><span className="text-[10px] text-muted">{r.sub}</span></div>{r.end}
                   </div>
                 ))}

@@ -1,17 +1,32 @@
 @import 'tailwindcss';
+@import './tokens.generated.css';
 
 @theme {
   --font-sans: var(--font-dm-sans), system-ui, sans-serif;
   --font-display: var(--font-outfit), system-ui, sans-serif;
-  --color-ink: #1b3029;
-  --color-canvas: #f5f7f2;
+  --color-ink: var(--ink);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
   --color-forest-950: #102c24;
-  --color-forest-800: #204a39;
-  --color-forest-700: #285143;
-  --color-forest-100: #eaf4ec;
+  --color-forest-800: var(--forest-800);
+  --color-forest-700: var(--forest-700);
+  --color-forest-100: var(--forest-100);
   --color-amber-kart: #f4a84c;
-  --color-line: #e6ece5;
-  --color-muted: #728579;
+  --color-line: var(--line);
+  --color-muted: var(--muted);
+}
+
+:root {
+  color-scheme: light;
+  --ink: #1b3029; --canvas: #f5f7f2; --surface: #ffffff;
+  --forest-800: #204a39; --forest-700: #285143; --forest-100: #eaf4ec;
+  --line: #e6ece5; --muted: #728579;
+}
+[data-theme='dark'] {
+  color-scheme: dark;
+  --ink: #e3ece6; --canvas: #0d1612; --surface: #15221c;
+  --forest-800: #3f8f68; --forest-700: #3a7d5e; --forest-100: #1d3128;
+  --line: #27392f; --muted: #93a79b;
 }
 
 body { background: var(--color-canvas); color: var(--color-ink); }

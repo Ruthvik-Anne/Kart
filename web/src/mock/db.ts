@@ -5,6 +5,7 @@ import { Ledger, ACCOUNTS as A, LedgerError, type JournalEntry } from '@/ledger/
 import * as rules from '@/ledger/rules';
 import { DEFAULT_FEES, type Fees } from '@/ledger/rules';
 import { appendBlock, type Block } from '@/chain/chain';
+import { promoDiscount, splitDiscount, normalizeCode, validatePromoDef, type Promo } from '@/lib/promo';
 import { cleanAttachments, type Attachment, type FileLike } from '@/lib/attachments';
 import { next, milestoneRule, type TaskEvent, type TaskStatus } from '@/domain/taskMachine';
 import {
@@ -17,12 +18,13 @@ const fail = (error: string): { ok: false; error: string } => ({ ok: false, erro
 const HOUR = 3_600_000;
 
 export interface Store { id: string; name: string; type: StoreType; vendorId: string; open: boolean }
-export interface Product { id: string; storeId: string; name: string; price: number; icon: string; desc: string; stock: number; category: 'food' | 'shop' }
+export interface Product { id: string; storeId: string; name: string; price: number; icon: string; desc: string; stock: number; category: 'food' | 'shop'; mrp?: number }
 export interface CartLine { productId: string; qty: number }
 export type OrderStatus = 'Placed' | 'Preparing' | 'Ready' | 'Collected' | 'Cancelled';
 export interface Order {
   id: string; buyerId: string; storeId: string; kind: 'food' | 'shop' | 'print'; title: string;
   amount: number; status: OrderStatus; ts: number; window?: string; files?: Attachment[];
+  productIds?: string[]; discount?: number; promoCode?: string;
 }
 export interface Milestone {
   id: string; title: string; share: number; amount: number; status: 'pending' | 'submitted' | 'released';
@@ -47,7 +49,7 @@ export interface Message {
   attachments?: Attachment[]; quote?: Quote;
 }
 export interface Review {
-  id: string; kind: 'task' | 'order'; refId: string; fromId: string; toId: string; as: 'provider' | 'poster' | 'store';
+  id: string; kind: 'task' | 'order' | 'product'; refId: string; fromId: string; toId: string; as: 'provider' | 'poster' | 'store';
   storeId?: string; rating: number; comment: string; ts: number;
 }
 export interface TaskDraft {
@@ -75,7 +77,13 @@ export interface CampusEvent {
 export interface Ticket { id: string; eventId: string; userId: string; ts: number; code: string }
 export interface VendorApp { id: string; name: string; type: StoreType; ownerName: string; status: 'pending' | 'approved' | 'rejected' }
 
+export interface PromoUse { code: string; userId: string; orderId: string }
+export interface WishItem { userId: string; productId: string; ts: number }
+
 export interface Db {
+  promos: Promo[];
+  promoUses: PromoUse[];
+  wishlist: WishItem[];
   reviews: Review[];
   workflows: Workflow[];
   listings: Listing[];
@@ -137,7 +145,30 @@ export class Kart {
   }
 
   // ---------- commerce ----------
-  checkout(actor: User, lines: CartLine[], window: string): Result<{ orderIds: string[] }> {
+  /** Which promo (if any) applies to these lines for this user, and what it takes off. */
+  private resolvePromo(actor: User, code: string | undefined, subtotal: number): { error: string } | { promo?: Promo; discount: number } {
+    if (!code || !code.trim()) return { discount: 0 };
+    const promo = this.db.promos.find(x => x.code === normalizeCode(code));
+    if (!promo || !promo.active) return { error: 'That code is not valid.' };
+    if (this.db.promoUses.some(u => u.code === promo.code && u.userId === actor.id)) return { error: 'You have already used that code.' };
+    if (promo.maxUses !== undefined && this.db.promoUses.filter(u => u.code === promo.code).length >= promo.maxUses) return { error: 'That code has been fully redeemed.' };
+    if (subtotal < promo.min) return { error: 'Add ' + (promo.min - subtotal) + ' KC more to use ' + promo.code + '.' };
+    return { promo, discount: promoDiscount(promo, subtotal) };
+  }
+
+  private cartSubtotal(lines: CartLine[]): number {
+    return lines.reduce((a, l) => a + (this.db.products.find(p => p.id === l.productId)?.price ?? 0) * (Number.isInteger(l.qty) ? l.qty : 0), 0);
+  }
+
+  previewPromo(actor: User, lines: CartLine[], code: string): Result<{ discount: number; label: string; code: string }> {
+    const subtotal = this.cartSubtotal(lines);
+    const r = this.resolvePromo(actor, code, subtotal);
+    if ('error' in r) return fail(r.error);
+    if (!r.promo) return fail('Enter a code.');
+    return { ok: true, discount: r.discount, label: r.promo.label, code: r.promo.code };
+  }
+
+  checkout(actor: User, lines: CartLine[], window: string, promoCode?: string): Result<{ orderIds: string[]; discount: number }> {
     if (!can(actor, 'order:create')) return fail('Not allowed.');
     if (!lines.length) return fail('Your cart is empty.');
     const byStore = new Map<string, { product: Product; qty: number }[]>();
@@ -149,23 +180,30 @@ export class Kart {
       byStore.set(product.storeId, [...(byStore.get(product.storeId) ?? []), { product, qty: l.qty }]);
     }
     const total = [...byStore.values()].flat().reduce((a, l) => a + l.product.price * l.qty, 0);
-    if (this.balance(actor.id) < total) return fail('Not enough KC. Top up your wallet first.');
+    const pr = this.resolvePromo(actor, promoCode, total);
+    if ('error' in pr) return fail(pr.error);
+    if (this.balance(actor.id) < total - pr.discount) return fail('Not enough KC. Top up your wallet first.');
+    const stores = [...byStore.entries()];
+    const shares = splitDiscount(pr.discount, stores.map(([, items]) => items.reduce((a, l) => a + l.product.price * l.qty, 0)));
     const orderIds: string[] = [];
-    for (const [storeId, items] of byStore) {
+    for (const [n, [storeId, items]] of stores.entries()) {
       const store = this.store(storeId)!;
       const amount = items.reduce((a, l) => a + l.product.price * l.qty, 0);
+      const discount = shares[n];
       const id = this.id('KRT');
-      const err = this.post(rules.checkout(id, actor.id, store.vendorId, amount, this.db.fees));
+      const err = this.post(rules.checkout(id, actor.id, store.vendorId, amount, this.db.fees, discount));
       if (err) return fail(err);
       items.forEach(l => { l.product.stock -= l.qty; });
+      if (pr.promo && discount > 0) this.db.promoUses.push({ code: pr.promo.code, userId: actor.id, orderId: id });
       this.db.orders.unshift({
         id, buyerId: actor.id, storeId, kind: items[0].product.category, amount, status: 'Placed', ts: Date.now(), window,
+        productIds: items.map(l => l.product.id), discount: discount || undefined, promoCode: discount && pr.promo ? pr.promo.code : undefined,
         title: items.map(l => `${l.product.name}${l.qty > 1 ? ` × ${l.qty}` : ''}`).join(', '),
       });
       this.notify(store.vendorId, `New order ${id} · ${amount} KC`, '/vendor/queue');
       orderIds.push(id);
     }
-    return { ok: true, orderIds };
+    return { ok: true, orderIds, discount: pr.discount };
   }
 
   printRequest(actor: User, storeId: string, p: { doc: string; pages: number; copies: number; color: boolean; duplex: boolean; spiral: boolean; file?: FileLike }): Result<{ orderId: string }> {
@@ -206,9 +244,10 @@ export class Kart {
     if (!o || !can(actor, 'order:view:own', { ownerId: o.buyerId })) return fail('Order not found.');
     if (o.status !== 'Placed') return fail('Only orders that have not started can be cancelled.');
     const store = this.store(o.storeId)!;
-    const err = this.post(rules.orderRefund(o.id, o.buyerId, store.vendorId, o.amount, this.db.fees));
+    const err = this.post(rules.orderRefund(o.id, o.buyerId, store.vendorId, o.amount, this.db.fees, o.discount ?? 0));
     if (err) return fail(err);
     o.status = 'Cancelled';
+    this.db.promoUses = this.db.promoUses.filter(u => u.orderId !== o.id);
     return { ok: true };
   }
 
@@ -744,6 +783,68 @@ export class Kart {
     return { ok: true };
   }
 
+  // ---------- promo codes (platform-funded) ----------
+  savePromo(actor: User, p: Promo): Result {
+    if (!can(actor, 'fees:edit')) return fail('Not allowed.');
+    const promo: Promo = { ...p, code: normalizeCode(p.code), label: p.label.trim() };
+    const err = validatePromoDef(promo);
+    if (err) return fail(err);
+    const i = this.db.promos.findIndex(x => x.code === promo.code);
+    if (i >= 0) this.db.promos[i] = promo; else this.db.promos.push(promo);
+    this.audit(actor.id, 'Saved promo code ' + promo.code + '.');
+    return { ok: true };
+  }
+
+  togglePromo(actor: User, code: string): Result {
+    if (!can(actor, 'fees:edit')) return fail('Not allowed.');
+    const promo = this.db.promos.find(x => x.code === code);
+    if (!promo) return fail('Code not found.');
+    promo.active = !promo.active;
+    this.audit(actor.id, (promo.active ? 'Enabled' : 'Disabled') + ' promo code ' + code + '.');
+    return { ok: true };
+  }
+
+  promoUsage(code: string) { return this.db.promoUses.filter(u => u.code === code).length; }
+
+  // ---------- wishlist ----------
+  wishlistFor(userId: string) { return this.db.wishlist.filter(w => w.userId === userId); }
+  isWished(userId: string, productId: string) { return this.db.wishlist.some(w => w.userId === userId && w.productId === productId); }
+
+  toggleWishlist(actor: User, productId: string): Result<{ saved: boolean }> {
+    if (!can(actor, 'order:create')) return fail('Not allowed.');
+    if (!this.db.products.some(p => p.id === productId)) return fail('Product not found.');
+    const i = this.db.wishlist.findIndex(w => w.userId === actor.id && w.productId === productId);
+    if (i >= 0) { this.db.wishlist.splice(i, 1); return { ok: true, saved: false }; }
+    if (this.wishlistFor(actor.id).length >= 50) return fail('Your wishlist is full (50 items).');
+    this.db.wishlist.unshift({ userId: actor.id, productId, ts: Date.now() });
+    return { ok: true, saved: true };
+  }
+
+  // ---------- product reviews (verified buyers only) ----------
+  hasBought(userId: string, productId: string) {
+    return this.db.orders.some(o => o.buyerId === userId && o.status === 'Collected' && o.productIds?.includes(productId));
+  }
+
+  productReviews(productId: string) { return this.db.reviews.filter(r => r.kind === 'product' && r.refId === productId); }
+
+  productRating(productId: string) {
+    const rs = this.productReviews(productId);
+    return { count: rs.length, average: rs.length ? Math.round((rs.reduce((a, r) => a + r.rating, 0) / rs.length) * 10) / 10 : 0 };
+  }
+
+  reviewProduct(actor: User, productId: string, rating: number, comment: string): Result {
+    const p = this.db.products.find(x => x.id === productId);
+    if (!p) return fail('Product not found.');
+    if (!this.hasBought(actor.id, productId)) return fail('You can review a product after you have collected it.');
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) return fail('Choose a rating from 1 to 5 stars.');
+    const text = comment.trim();
+    if (text.length > 300) return fail('Keep the review under 300 characters.');
+    const existing = this.db.reviews.find(r => r.kind === 'product' && r.refId === productId && r.fromId === actor.id);
+    if (existing) { Object.assign(existing, { rating, comment: text, ts: Date.now() }); return { ok: true }; }
+    this.db.reviews.unshift({ id: this.id('R'), kind: 'product', refId: productId, fromId: actor.id, toId: this.store(p.storeId)!.vendorId, as: 'store', rating, comment: text, ts: Date.now() });
+    return { ok: true };
+  }
+
   // ---------- reviews & reputation ----------
   /** Reviews a user may still write for a finished task: poster rates the provider, provider rates the poster. */
   reviewableTasks(userId: string): { task: Task; target: string; as: 'provider' | 'poster' }[] {
@@ -992,7 +1093,7 @@ export function seed(now = Date.now()): Db {
   const pr = (id: string, storeId: string, name: string, price: number, icon: string, desc: string, category: 'food' | 'shop', stock = 40): Product =>
     ({ id, storeId, name, price, icon, desc, stock, category });
   const products: Product[] = [
-    pr('f1', 'st-bites', 'Masala Dosa Combo', 85, '🥘', 'Crisp dosa, chutney and filter coffee', 'food'),
+    { ...pr('f1', 'st-bites', 'Masala Dosa Combo', 85, '🥘', 'Crisp dosa, chutney and filter coffee', 'food'), mrp: 110 },
     pr('f3', 'st-bites', 'Cold Coffee', 65, '🥤', 'Made to order, ready in 10 minutes', 'food'),
     pr('f2', 'st-green', 'Paneer Rice Bowl', 120, '🍛', 'A filling lunch between classes', 'food'),
     pr('f4', 'st-green', 'Veg Sandwich', 60, '🥪', 'Grilled with mint chutney', 'food'),
@@ -1039,6 +1140,11 @@ export function seed(now = Date.now()): Db {
   ];
   const vendorApps: VendorApp[] = [{ id: 'VA-1', name: 'Night Owl Café', ownerName: 'Karan T.', type: 'canteen', status: 'pending' }];
   const db: Db = {
+    promos: [
+      { code: 'KART10', kind: 'percent', value: 10, cap: 200, min: 150, label: '10% off, up to 200 KC', active: true },
+      { code: 'NEW50', kind: 'flat', value: 50, min: 300, label: '50 KC off orders over 300 KC', active: true, maxUses: 100 },
+      { code: 'LATE', kind: 'percent', value: 15, cap: 120, min: 90, label: '15% off orders over 90 KC', active: false },
+    ], promoUses: [], wishlist: [],
     reviews: [], workflows: [], listings, events, tickets: [], vendorApps,
     users, stores, products, orders: [], tasks, messages: [], profiles, services, notifications: [], audit: [],
     verifications: [{ id: 'VR-1', userId: 'u-meera', kind: 'provider', status: 'pending' }],

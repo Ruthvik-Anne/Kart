@@ -8,6 +8,7 @@ export const ACCOUNTS = {
   platformFees: 'PLATFORM_FEES',
   vendorCommission: 'VENDOR_COMMISSION',
   refunds: 'REFUNDS',
+  promo: 'PROMO_CREDITS',
   wallet: (userId: string) => `USER_WALLET:${userId}`,
   vendorPayable: (vendorId: string) => `VENDOR_PAYABLE:${vendorId}`,
   escrow: (taskId: string) => `TASK_ESCROW:${taskId}`,
@@ -16,7 +17,7 @@ export const ACCOUNTS = {
 export function accountType(account: string): AccountType {
   if (account === ACCOUNTS.ppiFloat) return 'asset';
   if (account === ACCOUNTS.platformFees || account === ACCOUNTS.vendorCommission) return 'revenue';
-  if (account === ACCOUNTS.refunds) return 'expense';
+  if (account === ACCOUNTS.refunds || account === ACCOUNTS.promo) return 'expense';
   return 'liability';
 }
 

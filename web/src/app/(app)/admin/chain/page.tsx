@@ -28,8 +28,8 @@ export default function AuditChain() {
         <Button variant="danger" onClick={() => { if (confirm('Demo only: this alters one anchored ledger entry so you can see verification fail. Continue?')) act(kart => kart.tamperDemo(me), 'Entry altered (demo). Run verification'); }}>Tamper with an entry (demo)</Button>
       </div>
       {shown && (
-        <Card className={`mb-5 ${shown.ok ? '!border-[#cfe6d2]' : '!border-red-300 !bg-red-50'}`}>
-          <b className={shown.ok ? 'text-[#2f7a45]' : 'text-red-700'}>{shown.ok ? '✓ Chain verified: every anchored entry matches the ledger.' : '✗ Verification failed'}</b>
+        <Card className={`mb-5 ${shown.ok ? '!border-xcfe6d2' : '!border-red-300 !bg-red-50'}`}>
+          <b className={shown.ok ? 'text-x2f7a45' : 'text-red-700'}>{shown.ok ? '✓ Chain verified: every anchored entry matches the ledger.' : '✗ Verification failed'}</b>
           {!shown.ok && <ul className="mt-2 list-disc pl-5 text-xs text-red-800">{shown.problems.map(p => <li key={p}>{p}</li>)}</ul>}
           <div className="mt-1 text-[10px] text-muted">Checked {when(shown.at)}</div>
         </Card>

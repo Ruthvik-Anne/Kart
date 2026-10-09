@@ -56,7 +56,7 @@ export default function NewTask() {
           <div role="radiogroup" aria-label="Task type" className="grid gap-3 sm:grid-cols-3">
             {KINDS.map(o => (
               <button key={o.id} type="button" role="radio" aria-checked={kind === o.id} onClick={() => pickKind(o.id)}
-                className={`rounded-xl border p-3 text-left text-xs ${kind === o.id ? 'border-forest-800 bg-forest-100' : 'border-[#dce7dc]'}`}>
+                className={`rounded-xl border p-3 text-left text-xs ${kind === o.id ? 'border-forest-800 bg-forest-100' : 'border-xdce7dc'}`}>
                 <b className="block">{o.label}</b><span className="text-muted">{o.hint}</span>
               </button>
             ))}
@@ -88,7 +88,7 @@ export default function NewTask() {
             </div>
             <div className="mt-3 flex items-center justify-between text-xs">
               {kind === 'long_term' && ms.length < 6 ? <Button type="button" size="sm" variant="secondary" onClick={() => setMs(m => [...m, { title: `Milestone ${m.length + 1}`, share: 0 }])}>+ Add milestone</Button> : <span />}
-              <b className={total === 100 ? 'text-[#2f7a45]' : 'text-red-700'}>Total {total}%</b>
+              <b className={total === 100 ? 'text-x2f7a45' : 'text-red-700'}>Total {total}%</b>
             </div>
           </Card>
         )}

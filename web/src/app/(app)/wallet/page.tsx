@@ -38,7 +38,7 @@ export default function Wallet() {
       {rows.length === 0 ? <Card>No activity yet.</Card> : (
         <DataTable head={['Entry', 'Description', 'Date', 'Amount']} rows={rows.map(({ e, signed }) => [
           <code key="i" className="text-[11px]">{e.id}</code>, <span key="m"><b>{e.memo}</b><br /><span className="text-muted">{e.type.replace('_', ' ')}</span></span>, when(e.ts),
-          <b key="a" className={signed >= 0 ? 'text-[#338454]' : 'text-[#c46b48]'}>{signed >= 0 ? '+' : '−'}{kc(Math.abs(signed))}</b>,
+          <b key="a" className={signed >= 0 ? 'text-x338454' : 'text-xc46b48'}>{signed >= 0 ? '+' : '−'}{kc(Math.abs(signed))}</b>,
         ])} />
       )}
     </>

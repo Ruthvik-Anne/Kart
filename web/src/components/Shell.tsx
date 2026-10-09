@@ -4,16 +4,18 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { canVisit, homeFor, navFor, type NavItem, type Role } from '@/rbac/policy';
 import { useKart } from '@/mock/StoreProvider';
+import { useCart } from '@/components/CartProvider';
 import { Button, Empty, kc } from '@/components/ui';
 
 const ROLE_LABEL: Record<Role, string> = { student: 'Student', vendor: 'Vendor', campus_admin: 'Campus admin', platform_admin: 'Platform admin' };
 const SECTION_ORDER: NavItem['section'][] = ['Campus', 'Work', 'Store', 'More', 'Admin'];
 
 export function Shell({ children }: { children: React.ReactNode }) {
-  const { ready, me, k, signIn, signOut, reset, version } = useKart();
+  const { ready, me, k, signIn, signOut, reset, version, mode } = useKart();
   const path = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const cart = useCart();
 
   useEffect(() => { if (ready && !me) router.replace('/login'); }, [ready, me, router]);
   useEffect(() => setOpen(false), [path]);
@@ -62,33 +64,38 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="min-w-0">
-        <header className="sticky top-0 z-10 flex h-16 items-center gap-3 border-b border-[#e9eee7] bg-white px-4 md:h-20 md:px-8">
+        <header className="sticky top-0 z-10 flex h-16 items-center gap-3 border-b border-xe9eee7 bg-surface px-4 md:h-20 md:px-8">
           <button aria-label="Open menu" onClick={() => setOpen(true)} className="grid h-9 w-9 place-items-center rounded-xl border border-line text-lg md:hidden">☰</button>
-          <span className="hidden rounded-full border border-[#e4ebe2] px-3 py-2 text-[11px] font-bold text-[#244b39] sm:inline">📍 Main Campus</span>
-          <span className="hidden rounded-full bg-forest-100 px-3 py-2 text-[11px] font-extrabold text-[#244b39] sm:inline">{role}</span>
+          <span className="hidden rounded-full border border-xe4ebe2 px-3 py-2 text-[11px] font-bold text-x244b39 sm:inline">📍 Main Campus</span>
+          <span className="hidden rounded-full bg-forest-100 px-3 py-2 text-[11px] font-extrabold text-x244b39 sm:inline">{role}</span>
           <div className="ml-auto flex min-w-0 items-center gap-2">
             {(me.roles.includes('student') || me.roles.includes('vendor')) && (
-              <Link href={me.roles.includes('vendor') ? '/vendor/settlements' : '/wallet'} className="rounded-full border border-[#dcecdf] bg-forest-100 px-3 py-2 text-[11px] font-extrabold text-[#244b39]">
-                {me.roles.includes('vendor') ? `Payable ${kc(k.ledger.balance(`VENDOR_PAYABLE:${me.id}`))}` : `◉ ${kc(k.balance(me.id))}`} <span className="text-[8px] text-[#5c8862]">DEMO</span>
+              <Link href={me.roles.includes('vendor') ? '/vendor/settlements' : '/wallet'} className="rounded-full border border-xdcecdf bg-forest-100 px-3 py-2 text-[11px] font-extrabold text-x244b39">
+                {me.roles.includes('vendor') ? `Payable ${kc(k.ledger.balance(`VENDOR_PAYABLE:${me.id}`))}` : `◉ ${kc(k.balance(me.id))}`} <span className="text-[8px] text-x5c8862">DEMO</span>
               </Link>
             )}
+            {me.roles.includes('student') && (
+              <button onClick={() => cart.setOpen(true)} aria-label={cart.count ? `Open cart, ${cart.count} items` : 'Open cart'} className="relative grid h-9 w-9 place-items-center rounded-xl border border-line">🛒{cart.count > 0 && <sup className="absolute -right-1 -top-1 rounded-full bg-amber-kart px-1 text-[9px] font-extrabold">{cart.count}</sup>}</button>
+            )}
+            {mode === 'demo' && <>
             <label className="sr-only" htmlFor="demo-user">Switch demo user</label>
             <select id="demo-user" value={me.id} onChange={e => { signIn(e.target.value); router.push(homeFor(k.user(e.target.value)!)); }}
-              className="w-24 min-w-0 rounded-xl border border-[#dce7db] bg-white px-2 py-2 text-[11px] font-bold sm:w-auto sm:max-w-[9.5rem]">
+              className="w-24 min-w-0 rounded-xl border border-xdce7db bg-surface px-2 py-2 text-[11px] font-bold sm:w-auto sm:max-w-[9.5rem]">
               {['student', 'vendor', 'campus_admin', 'platform_admin'].map(r => (
                 <optgroup key={r} label={ROLE_LABEL[r as Role]}>
                   {k.db.users.filter(u => u.roles[0] === r).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </optgroup>
               ))}
             </select>
+            </>}
             <Link href="/notifications" aria-label={unread ? `Notifications, ${unread} unread` : 'Notifications'} className="relative grid h-9 w-9 place-items-center rounded-xl border border-line">🔔{unread > 0 && <sup className="absolute -right-1 -top-1 rounded-full bg-amber-kart px-1 text-[9px] font-extrabold">{unread}</sup>}</Link>
             <Button variant="secondary" size="sm" className="hidden sm:inline-flex" onClick={() => { signOut(); router.push('/login'); }}>Sign out</Button>
           </div>
         </header>
-        <div className="border-b border-[#f1ddb0] bg-[#fff5dc] px-4 py-1.5 text-center text-[11px] text-[#806528] md:px-8">
+        {mode === 'demo' && <div className="border-b border-xf1ddb0 bg-xfff5dc px-4 py-1.5 text-center text-[11px] text-x806528 md:px-8">
           Demo mode: role switching is for exploring only, KC is simulated and has no monetary value.{' '}
           <button onClick={() => { if (confirm('Reset all demo data in this browser?')) reset(); }} className="font-extrabold underline">Reset data</button>
-        </div>
+        </div>}
         <main key={path}className="mx-auto max-w-[1460px] px-4 pb-16 pt-6 md:px-10 md:pt-8">
           {allowed ? children : (
             <Empty title="403 · You don't have access to this page">

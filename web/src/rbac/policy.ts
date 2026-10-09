@@ -74,7 +74,7 @@ export interface NavItem {
   label: string;
   icon: string;
   requires: Permission;
-  section: 'Campus' | 'More' | 'Work' | 'Store' | 'Admin';
+  section: 'Campus' | 'More' | 'Work' | 'Store' | 'Admin' | 'Hidden'; // Hidden = guards a route without a sidebar link
   storeTypes?: StoreType[]; // vendor-only visibility by store type
   roles?: Role[];           // restrict to roles even if the permission is shared
 }
@@ -82,8 +82,10 @@ export interface NavItem {
 export const NAV: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: '▦', requires: 'catalog:view', section: 'Campus', roles: ['student'] },
   { href: '/food', label: 'Food & Canteen', icon: '🍽️', requires: 'order:create', section: 'Campus' },
+  { href: '/wishlist', label: 'Wishlist', icon: '♡', requires: 'order:create', section: 'More' },
   { href: '/xerox', label: 'Xerox & Print', icon: '🖨️', requires: 'print:create', section: 'Campus' },
   { href: '/shop', label: 'Supplies & Merch', icon: '📐', requires: 'order:create', section: 'Campus' },
+  { href: '/product', label: 'Product', icon: '🛍', requires: 'order:create', section: 'Hidden' },
   { href: '/services', label: 'Student Services', icon: '✦', requires: 'catalog:view', section: 'Campus', roles: ['student'] },
   { href: '/tasks', label: 'Task Board', icon: '⚡', requires: 'task:view', section: 'Campus' },
   { href: '/my-tasks', label: 'My Tasks', icon: '☑', requires: 'task:post', section: 'Campus' },
@@ -93,6 +95,7 @@ export const NAV: NavItem[] = [
   { href: '/messages', label: 'Messages', icon: '✉', requires: 'thread:use', section: 'More' },
   { href: '/wallet', label: 'KC Wallet', icon: '◉', requires: 'wallet:view:own', section: 'More' },
   { href: '/notifications', label: 'Notifications', icon: '🔔', requires: 'catalog:view', section: 'More' },
+  { href: '/settings', label: 'Settings', icon: '⚙', requires: 'catalog:view', section: 'More' },
   { href: '/provider', label: 'Provider Hub', icon: '★', requires: 'provider:hub', section: 'Work' },
 
   { href: '/vendor', label: 'Console', icon: '▤', requires: 'store:manage', section: 'Store' },
@@ -113,6 +116,7 @@ export const NAV: NavItem[] = [
   { href: '/admin/fraud', label: 'Fraud alerts', icon: '⚠', requires: 'fraud:view', section: 'Admin' },
   { href: '/admin/users', label: 'Users & roles', icon: '☰', requires: 'user:roles', section: 'Admin' },
   { href: '/admin/fees', label: 'Fees & weights', icon: '%', requires: 'fees:edit', section: 'Admin' },
+  { href: '/admin/promos', label: 'Promo codes', icon: '🏷', requires: 'fees:edit', section: 'Admin' },
 ];
 
 function visible(user: User, item: NavItem): boolean {
@@ -122,7 +126,7 @@ function visible(user: User, item: NavItem): boolean {
   return true;
 }
 
-export const navFor = (user: User): NavItem[] => NAV.filter(item => visible(user, item));
+export const navFor = (user: User): NavItem[] => NAV.filter(item => item.section !== 'Hidden' && visible(user, item));
 
 /** Most specific nav entry for a pathname decides the guard (longest href prefix). */
 export function guardFor(pathname: string): NavItem | undefined {

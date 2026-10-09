@@ -25,7 +25,7 @@ export default function Orders() {
               <Card key={o.id}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#5d8369]">{o.id} · {when(o.ts)}</div>
+                    <div className="text-[10px] font-extrabold uppercase tracking-wider text-x5d8369">{o.id} · {when(o.ts)}</div>
                     <h3 className="mt-1 font-display text-base font-bold">{o.title}</h3>
                     <div className="text-[11px] text-muted">{k.store(o.storeId)?.name}{o.window ? ` · ${o.window}` : ''} · {kc(o.amount)}</div>
                   </div>

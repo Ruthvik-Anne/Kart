@@ -14,19 +14,20 @@ export const topUp = (userId: string, amount: number, ref: string): EntryInput =
   postings: [dr(A.ppiFloat, amount), cr(A.wallet(userId), amount)],
 });
 
-export function checkout(orderId: string, buyerId: string, vendorId: string, amount: number, fees: Fees): EntryInput {
+/** `discount` is funded by the platform (PROMO_CREDITS): the buyer pays amount - discount, the vendor is paid on the full amount. */
+export function checkout(orderId: string, buyerId: string, vendorId: string, amount: number, fees: Fees, discount = 0): EntryInput {
   const commission = Math.ceil(amount * fees.vendorCommissionRate);
   return {
     key: `order:${orderId}`, type: 'order', memo: `Order ${orderId}`,
-    postings: nonZero(dr(A.wallet(buyerId), amount), cr(A.vendorPayable(vendorId), amount - commission), cr(A.vendorCommission, commission)),
+    postings: nonZero(dr(A.wallet(buyerId), amount - discount), dr(A.promo, discount), cr(A.vendorPayable(vendorId), amount - commission), cr(A.vendorCommission, commission)),
   };
 }
 
-export function orderRefund(orderId: string, buyerId: string, vendorId: string, amount: number, fees: Fees): EntryInput {
+export function orderRefund(orderId: string, buyerId: string, vendorId: string, amount: number, fees: Fees, discount = 0): EntryInput {
   const commission = Math.ceil(amount * fees.vendorCommissionRate);
   return {
     key: `order-refund:${orderId}`, type: 'refund', memo: `Refund for order ${orderId}`,
-    postings: nonZero(dr(A.vendorPayable(vendorId), amount - commission), dr(A.vendorCommission, commission), cr(A.wallet(buyerId), amount)),
+    postings: nonZero(dr(A.vendorPayable(vendorId), amount - commission), dr(A.vendorCommission, commission), cr(A.wallet(buyerId), amount - discount), cr(A.promo, discount)),
   };
 }
 

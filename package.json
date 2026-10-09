@@ -1,10 +1,14 @@
 {
-  "name": "kart-campus-demo",
+  "name": "kart",
   "private": true,
-  "type": "module",
+  "description": "KART campus commerce platform. The application lives in web/.",
   "scripts": {
-    "dev": "node dev-server.mjs",
-    "start": "node dev-server.mjs",
-    "test": "node smoke-test.mjs"
+    "dev": "npm --prefix web run dev",
+    "build": "npm --prefix web run build",
+    "start": "npm --prefix web run start",
+    "lint": "npm --prefix web run lint",
+    "test": "npm --prefix web test",
+    "test:e2e": "npm --prefix web run test:e2e",
+    "install:web": "npm --prefix web install"
   }
 }
