@@ -257,21 +257,29 @@ class MarketService(KartService):
         with self.database.transaction() as db:
             actor = self._actor(db, user_id)
             self._student(actor)
-            if data["kind"] != "sale":
-                raise DomainError("Rental checkout is not implemented yet")
+            if data["kind"] not in ("sale", "rental"):
+                raise DomainError("Invalid listing kind")
+            if data["kind"] == "rental" and (not 1 <= data.get("max_days", 0) <= 30 or
+                                              not 0 <= data.get("deposit", -1) <= 1_000_000):
+                raise DomainError("Invalid rental terms")
             listing_id = uid()
             db.execute("INSERT INTO student_listings VALUES (?,?,?,?,?,?,?,?,?,?)", (
                 listing_id, actor["campus_id"], user_id, data["title"], data["description"],
                 data["amount"], data["kind"], "active", None, int(time.time()),
             ))
+            if data["kind"] == "rental":
+                db.execute("INSERT INTO rental_terms VALUES (?,?,?)", (
+                    listing_id, data["deposit"], data["max_days"],
+                ))
             self._audit(db, actor, "listing.created", listing_id)
             return {"id": listing_id}
 
     def listings(self, user_id: str):
         with self.database.connect() as db:
             actor = self._actor(db, user_id)
-            return [dict(row) for row in db.execute("""SELECT * FROM student_listings
-                WHERE campus_id=? AND (status='active' OR seller_id=? OR buyer_id=?) ORDER BY created_at DESC""",
+            return [dict(row) for row in db.execute("""SELECT l.*,r.deposit,r.max_days FROM student_listings l
+                LEFT JOIN rental_terms r ON r.listing_id=l.id
+                WHERE l.campus_id=? AND (l.status='active' OR l.seller_id=? OR l.buyer_id=?) ORDER BY l.created_at DESC""",
                 (actor["campus_id"], user_id, user_id))]
 
     def reserve_listing(self, user_id: str, listing_id: str):
@@ -279,7 +287,7 @@ class MarketService(KartService):
             actor = self._actor(db, user_id)
             self._student(actor)
             listing = self._listing(db, actor, listing_id)
-            if listing["status"] != "active" or listing["seller_id"] == user_id:
+            if listing["kind"] != "sale" or listing["status"] != "active" or listing["seller_id"] == user_id:
                 raise DomainError("Listing is unavailable", 409)
             payment(db, key=f"listing:{listing_id}:reserve", kind="listing_reserve", ref=listing_id,
                     debit=wallet(user_id), credit=reserve("listing:" + listing_id), amount=listing["amount"])
@@ -312,6 +320,94 @@ class MarketService(KartService):
             db.execute("UPDATE student_listings SET status=? WHERE id=?", (status, listing_id))
             self._audit(db, actor, "listing." + action, listing_id)
             return {"id": listing_id, "status": status}
+
+    def rentals(self, user_id: str):
+        with self.database.connect() as db:
+            actor = self._actor(db, user_id)
+            return [dict(row) for row in db.execute("""SELECT * FROM rentals WHERE campus_id=?
+                AND (renter_id=? OR seller_id=?) ORDER BY created_at DESC""",
+                (actor["campus_id"], user_id, user_id))]
+
+    def rent_listing(self, user_id: str, listing_id: str, days: int):
+        with self.database.transaction() as db:
+            actor = self._actor(db, user_id)
+            self._student(actor)
+            listing = self._listing(db, actor, listing_id)
+            terms = db.execute("SELECT * FROM rental_terms WHERE listing_id=?", (listing_id,)).fetchone()
+            if not terms or listing["status"] != "active" or listing["seller_id"] == user_id:
+                raise DomainError("Rental is unavailable", 409)
+            if not isinstance(days, int) or isinstance(days, bool) or days < 1 or days > terms["max_days"]:
+                raise DomainError("Choose a valid rental period")
+            amount = listing["amount"] * days
+            total = amount + terms["deposit"]
+            if total > 10_000_000:
+                raise DomainError("Rental total too high")
+            rental_id = uid()
+            payment(db, key=f"rental:{rental_id}:reserve", kind="rental_reserve", ref=rental_id,
+                    debit=wallet(user_id), credit=reserve("rental:" + rental_id), amount=total)
+            db.execute("INSERT INTO rentals VALUES (?,?,?,?,?,?,?,?,?,?,?)", (
+                rental_id, listing_id, actor["campus_id"], user_id, listing["seller_id"],
+                amount, terms["deposit"], days, 0, "reserved", int(time.time()),
+            ))
+            db.execute("UPDATE student_listings SET status='reserved',buyer_id=? WHERE id=?", (user_id, listing_id))
+            self._audit(db, actor, "rental.reserved", rental_id)
+            return {"id": rental_id, "status": "reserved", "fee": amount, "deposit": terms["deposit"]}
+
+    def rental_action(self, user_id: str, rental_id: str, action: str):
+        rules = {"handover": ("reserved", "active", "seller_id"),
+                 "return": ("active", "return_pending", "renter_id"),
+                 "confirm_return": ("return_pending", "completed", "seller_id"),
+                 "cancel": ("reserved", "cancelled", "renter_id"),
+                 "dispute": ("return_pending", "disputed", None)}
+        if action not in rules:
+            raise DomainError("Unknown rental action", 404)
+        with self.database.transaction() as db:
+            actor = self._actor(db, user_id)
+            rental = db.execute("SELECT * FROM rentals WHERE id=? AND campus_id=?", (rental_id, actor["campus_id"])).fetchone()
+            if not rental or user_id not in (rental["renter_id"], rental["seller_id"]):
+                raise DomainError("Rental not found", 404)
+            before, after, owner = rules[action]
+            if owner and rental[owner] != user_id:
+                raise DomainError("Not permitted for this rental", 403)
+            if rental["status"] != before:
+                raise DomainError("Invalid rental transition", 409)
+            account = reserve("rental:" + rental_id)
+            if action == "handover":
+                payment(db, key=f"rental:{rental_id}:fee", kind="rental_fee", ref=rental_id,
+                        debit=account, credit=wallet(rental["seller_id"]), amount=rental["fee"])
+            elif action == "cancel":
+                payment(db, key=f"rental:{rental_id}:refund", kind="rental_refund", ref=rental_id,
+                        debit=account, credit=wallet(rental["renter_id"]), amount=rental["fee"] + rental["deposit"])
+            elif action == "confirm_return" and rental["deposit"]:
+                payment(db, key=f"rental:{rental_id}:deposit", kind="rental_deposit_refund", ref=rental_id,
+                        debit=account, credit=wallet(rental["renter_id"]), amount=rental["deposit"])
+            db.execute("UPDATE rentals SET status=? WHERE id=?", (after, rental_id))
+            if action == "handover":
+                db.execute("UPDATE rentals SET due_at=? WHERE id=?", (int(time.time()) + rental["duration_days"] * 86400, rental_id))
+            if action in ("cancel", "confirm_return"):
+                db.execute("UPDATE student_listings SET status='active',buyer_id=NULL WHERE id=?", (rental["listing_id"],))
+            self._audit(db, actor, "rental." + action, rental_id)
+            return {"id": rental_id, "status": after}
+
+    def resolve_rental(self, user_id: str, rental_id: str, release_deposit_to_seller: bool):
+        with self.database.transaction() as db:
+            actor = self._actor(db, user_id)
+            rental = db.execute("SELECT * FROM rentals WHERE id=? AND campus_id=?", (rental_id, actor["campus_id"])).fetchone()
+            if not rental:
+                raise DomainError("Rental not found", 404)
+            if actor["role"] not in ("campus_admin", "platform_admin"):
+                raise DomainError("Administrator required", 403)
+            if rental["status"] != "disputed":
+                raise DomainError("Rental is not disputed", 409)
+            if rental["deposit"]:
+                payment(db, key=f"rental:{rental_id}:resolve", kind="rental_resolution", ref=rental_id,
+                        debit=reserve("rental:" + rental_id),
+                        credit=wallet(rental["seller_id"] if release_deposit_to_seller else rental["renter_id"]),
+                        amount=rental["deposit"])
+            db.execute("UPDATE rentals SET status='completed' WHERE id=?", (rental_id,))
+            db.execute("UPDATE student_listings SET status='active',buyer_id=NULL WHERE id=?", (rental["listing_id"],))
+            self._audit(db, actor, "rental.resolved", rental_id)
+            return {"id": rental_id, "status": "completed"}
 
     def create_service(self, user_id: str, data: dict):
         with self.database.transaction() as db:

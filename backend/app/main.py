@@ -93,6 +93,16 @@ class ListingIn(BaseModel):
     description: str = Field(min_length=3, max_length=4000)
     amount: int = Field(gt=0, le=1_000_000)
     kind: str = Field(pattern="^(sale|rental)$")
+    deposit: int = Field(default=0, ge=0, le=1_000_000)
+    max_days: int = Field(default=0, ge=0, le=30)
+
+
+class RentalIn(BaseModel):
+    days: int = Field(ge=1, le=30)
+
+
+class RentalDecision(BaseModel):
+    release_deposit_to_seller: bool
 
 
 class ServiceIn(BaseModel):
@@ -322,6 +332,26 @@ def reserve_listing(listing_id: str, user_id: str = Depends(current_user)):
 @app.post("/v1/listings/{listing_id}/actions/{action}")
 def listing_action(listing_id: str, action: str, user_id: str = Depends(current_user)):
     return call(service.listing_action, user_id, listing_id, action)
+
+
+@app.get("/v1/rentals")
+def rentals(user_id: str = Depends(current_user)):
+    return call(service.rentals, user_id)
+
+
+@app.post("/v1/listings/{listing_id}/rent", status_code=201)
+def rent_listing(listing_id: str, data: RentalIn, user_id: str = Depends(current_user)):
+    return call(service.rent_listing, user_id, listing_id, data.days)
+
+
+@app.post("/v1/rentals/{rental_id}/actions/{action}")
+def rental_action(rental_id: str, action: str, user_id: str = Depends(current_user)):
+    return call(service.rental_action, user_id, rental_id, action)
+
+
+@app.post("/v1/rentals/{rental_id}/resolve")
+def resolve_rental(rental_id: str, data: RentalDecision, user_id: str = Depends(current_user)):
+    return call(service.resolve_rental, user_id, rental_id, data.release_deposit_to_seller)
 
 
 @app.get("/v1/services")

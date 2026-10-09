@@ -11,7 +11,8 @@ type Store = { id: string; name: string; type: string };
 type Product = { id: string; store_id: string; store_name: string; name: string; price: number; stock: number };
 type Order = { id: string; store_id: string; amount: number; status: string; pickup_code?: string; items: { name: string; quantity: number }[] };
 type PrintJob = { id: string; store_id: string; file_name: string; pages: number; copies: number; amount: number; status: string; pickup_code?: string };
-type Listing = { id: string; title: string; amount: number; status: string; seller_id: string; buyer_id?: string };
+type Listing = { id: string; title: string; amount: number; kind: 'sale' | 'rental'; deposit?: number; max_days?: number; status: string; seller_id: string; buyer_id?: string };
+type Rental = { id: string; listing_id: string; renter_id: string; seller_id: string; status: string; fee: number; deposit: number; due_at: number };
 type Service = { id: string; title: string; amount: number; provider_id: string };
 type Booking = { id: string; service_id: string; status: string; provider_id: string; buyer_id: string };
 type Event = { id: string; title: string; price: number; capacity: number; reserved_seats: number; starts_at: number };
@@ -55,6 +56,7 @@ export default function LiveWorkspace() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [printJobs, setPrintJobs] = useState<PrintJob[]>([]);
   const [listings, setListings] = useState<Listing[]>([]);
+  const [rentals, setRentals] = useState<Rental[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
@@ -68,16 +70,16 @@ export default function LiveWorkspace() {
   const [bidderThread, setBidderThread] = useState('');
 
   const refresh = useCallback(async (token: string) => {
-    const [t, s, p, o, pj, l, sv, b, e, tk, org, w] = await Promise.all([
+    const [t, s, p, o, pj, l, rentalsData, sv, b, e, tk, org, w] = await Promise.all([
       backend<Task[]>('v1/tasks', token), backend<Store[]>('v1/stores', token),
       backend<Product[]>('v1/catalog', token), backend<Order[]>('v1/orders', token),
       backend<PrintJob[]>('v1/print-jobs', token),
-      backend<Listing[]>('v1/listings', token), backend<Service[]>('v1/services', token),
+      backend<Listing[]>('v1/listings', token), backend<Rental[]>('v1/rentals', token), backend<Service[]>('v1/services', token),
       backend<Booking[]>('v1/bookings', token), backend<Event[]>('v1/events', token),
       backend<Ticket[]>('v1/tickets', token), backend<Org[]>('v1/organizations/mine', token),
       backend<{ available: number; reserved: number }>('v1/wallet', token),
     ]);
-    setTasks(t); setStores(s); setProducts(p); setOrders(o); setPrintJobs(pj); setListings(l);
+    setTasks(t); setStores(s); setProducts(p); setOrders(o); setPrintJobs(pj); setListings(l); setRentals(rentalsData);
     setServices(sv); setBookings(b); setEvents(e); setTickets(tk); setOrgs(org); setBalance(w);
   }, []);
 
@@ -325,25 +327,44 @@ export default function LiveWorkspace() {
     </div>}
 
     {tab === 'market' && <div className="grid gap-5 lg:grid-cols-[1fr_2fr]">
-      <Card title="Sell an item"><form className="grid gap-2" onSubmit={submit('v1/listings', form => ({
-        title: field(form, 'title'), description: field(form, 'description'), amount: numeric(form, 'amount'), kind: 'sale',
+      <Card title="Sell or rent an item"><form className="grid gap-2" onSubmit={submit('v1/listings', form => ({
+        title: field(form, 'title'), description: field(form, 'description'), amount: numeric(form, 'amount'),
+        kind: field(form, 'kind'), deposit: numeric(form, 'deposit'), max_days: numeric(form, 'max_days'),
       }), 'Listing published')}>
         <input className={inputClass} name="title" placeholder="Textbook, calculator, bicycle…" minLength={3} required />
         <textarea className={inputClass} name="description" placeholder="Condition and handover details" minLength={3} required />
-        <input className={inputClass} name="amount" type="number" min="1" placeholder="Price in demo KC" required />
+        <select className={inputClass} name="kind"><option value="sale">Sell</option><option value="rental">Rent out</option></select>
+        <input className={inputClass} name="amount" type="number" min="1" placeholder="Sale price or rental fee per day (KC)" required />
+        <input className={inputClass} name="deposit" type="number" min="0" defaultValue="0" placeholder="Rental deposit KC" />
+        <input className={inputClass} name="max_days" type="number" min="0" max="30" defaultValue="0" placeholder="Maximum rental days (set 1–30 for rentals)" />
         <FormButton>Publish listing</FormButton></form></Card>
-      <Card title="Student listings"><div className="grid gap-3 sm:grid-cols-2">{listings.map(listing =>
+      <div className="grid gap-5"><Card title="Student listings"><div className="grid gap-3 sm:grid-cols-2">{listings.map(listing =>
         <div key={listing.id} className="rounded-xl border border-line p-4">
           <h3 className="font-bold">{listing.title}</h3><p className="text-xs text-muted">{listing.amount} KC · {listing.status}</p>
-          <div className="mt-3 flex gap-2">{listing.status === 'active' && listing.seller_id !== session.id &&
+          {listing.kind === 'rental' && <p className="text-xs text-muted">Per day · deposit {listing.deposit} KC · up to {listing.max_days} days</p>}
+          <div className="mt-3 flex gap-2">{listing.kind === 'sale' && listing.status === 'active' && listing.seller_id !== session.id &&
             <Button onClick={() => void run(`v1/listings/${listing.id}/reserve`, {}, 'KC reserved')}>Reserve</Button>}
-          {listing.status === 'reserved' && listing.buyer_id === session.id &&
+          {listing.kind === 'rental' && listing.status === 'active' && listing.seller_id !== session.id &&
+            <form className="flex gap-2" onSubmit={submit(`v1/listings/${listing.id}/rent`, form => ({ days: numeric(form, 'days') }), 'Rental reserved')}>
+              <input className={inputClass} name="days" type="number" min="1" max={listing.max_days} defaultValue="1" required /><FormButton>Rent</FormButton></form>}
+          {listing.kind === 'sale' && listing.status === 'reserved' && listing.buyer_id === session.id &&
             <Button onClick={() => void run(`v1/listings/${listing.id}/actions/confirm`, {}, 'Handover confirmed')}>Confirm handover</Button>}
-          {listing.status === 'reserved' && listing.buyer_id === session.id &&
+          {listing.kind === 'sale' && listing.status === 'reserved' && listing.buyer_id === session.id &&
             <Button onClick={() => void run(`v1/listings/${listing.id}/actions/cancel`, {}, 'Reservation refunded')}>Cancel</Button>}
           {listing.status === 'active' && listing.seller_id === session.id &&
             <Button onClick={() => void run(`v1/listings/${listing.id}/actions/withdraw`, {}, 'Listing withdrawn')}>Withdraw</Button>}</div>
         </div>)}{!listings.length && <p className="text-sm text-muted">No student listings yet.</p>}</div></Card>
+        <Card title="Your rentals"><div className="grid gap-2">{rentals.map(rental => <div key={rental.id} className="rounded-xl bg-forest-100 p-3 text-sm">
+          <strong>{listings.find(l => l.id === rental.listing_id)?.title ?? 'Rental'}</strong> · {rental.status}
+          <p className="text-xs text-muted">Fee {rental.fee} KC · deposit {rental.deposit} KC {rental.due_at > 0 && `· return ${new Date(rental.due_at * 1000).toLocaleDateString()}`}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {rental.seller_id === session.id && rental.status === 'reserved' && <Button onClick={() => void run(`v1/rentals/${rental.id}/actions/handover`, {}, 'Rental started')}>Confirm handover</Button>}
+            {rental.renter_id === session.id && rental.status === 'reserved' && <Button onClick={() => void run(`v1/rentals/${rental.id}/actions/cancel`, {}, 'Rental refunded')}>Cancel</Button>}
+            {rental.renter_id === session.id && rental.status === 'active' && <Button onClick={() => void run(`v1/rentals/${rental.id}/actions/return`, {}, 'Return requested')}>Request return</Button>}
+            {rental.seller_id === session.id && rental.status === 'return_pending' && <Button onClick={() => void run(`v1/rentals/${rental.id}/actions/confirm_return`, {}, 'Deposit returned')}>Confirm return</Button>}
+            {rental.status === 'return_pending' && <Button onClick={() => void run(`v1/rentals/${rental.id}/actions/dispute`, {}, 'Dispute opened')}>Dispute</Button>}
+          </div>
+        </div>)}{!rentals.length && <p className="text-sm text-muted">No rentals yet.</p>}</div></Card></div>
     </div>}
 
     {tab === 'services' && <div className="grid gap-5 lg:grid-cols-[1fr_2fr]">

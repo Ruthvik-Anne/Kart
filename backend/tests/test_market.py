@@ -105,6 +105,44 @@ class MarketTests(unittest.TestCase):
         self.s.resolve_booking("admin", disputed, False)
         self.assertEqual(self.s.wallet("buyer")["available"], 400)
 
+    def test_rental_fee_deposit_return_and_repeat_booking(self):
+        listing = self.s.create_listing("provider", {
+            "title": "Camera rental", "description": "Good condition", "amount": 40,
+            "kind": "rental", "deposit": 100, "max_days": 7,
+        })["id"]
+        rental = self.s.rent_listing("buyer", listing, 2)
+        self.assertEqual((rental["fee"], rental["deposit"]), (80, 100))
+        self.assertEqual(self.s.wallet("buyer")["available"], 320)
+        with self.assertRaises(DomainError):
+            self.s.rent_listing("other", listing, 1)
+        with self.assertRaises(DomainError):
+            self.s.rental_action("buyer", rental["id"], "handover")
+        self.s.rental_action("provider", rental["id"], "handover")
+        self.assertEqual(self.s.wallet("provider")["available"], 80)
+        self.assertGreater(self.s.rentals("buyer")[0]["due_at"], int(time.time()))
+        self.s.rental_action("buyer", rental["id"], "return")
+        self.s.rental_action("provider", rental["id"], "confirm_return")
+        self.assertEqual(self.s.wallet("buyer")["available"], 420)
+        self.assertEqual(self.s.listings("other")[0]["status"], "active")
+        second = self.s.rent_listing("buyer", listing, 1)
+        self.s.rental_action("buyer", second["id"], "cancel")
+        self.assertEqual(self.s.wallet("buyer")["available"], 420)
+
+    def test_rental_dispute_controls_deposit(self):
+        listing = self.s.create_listing("provider", {
+            "title": "Projector rental", "description": "Comes with cable", "amount": 30,
+            "kind": "rental", "deposit": 50, "max_days": 2,
+        })["id"]
+        rental_id = self.s.rent_listing("buyer", listing, 1)["id"]
+        self.s.rental_action("provider", rental_id, "handover")
+        self.s.rental_action("buyer", rental_id, "return")
+        self.s.rental_action("buyer", rental_id, "dispute")
+        with self.assertRaises(DomainError):
+            self.s.resolve_rental("other", rental_id, True)
+        self.s.resolve_rental("admin", rental_id, False)
+        self.assertEqual(self.s.wallet("buyer")["available"], 470)
+        self.assertEqual(self.s.wallet("provider")["available"], 30)
+
     def test_ticket_capacity_payment_and_one_time_checkin(self):
         club = self.s.create_organization("vendor", "Tech Club", "club")
         event = self.s.create_event("vendor", club["organization_id"], {

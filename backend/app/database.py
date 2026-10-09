@@ -93,6 +93,21 @@ CREATE TABLE IF NOT EXISTS student_listings (
   buyer_id TEXT REFERENCES users(id), created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS listings_campus_status ON student_listings(campus_id,status);
+CREATE TABLE IF NOT EXISTS rental_terms (
+  listing_id TEXT PRIMARY KEY REFERENCES student_listings(id),
+  deposit INTEGER NOT NULL CHECK(deposit >= 0),
+  max_days INTEGER NOT NULL CHECK(max_days BETWEEN 1 AND 30)
+);
+CREATE TABLE IF NOT EXISTS rentals (
+  id TEXT PRIMARY KEY, listing_id TEXT NOT NULL REFERENCES student_listings(id),
+  campus_id TEXT NOT NULL REFERENCES campuses(id), renter_id TEXT NOT NULL REFERENCES users(id),
+  seller_id TEXT NOT NULL REFERENCES users(id), fee INTEGER NOT NULL CHECK(fee > 0),
+  deposit INTEGER NOT NULL CHECK(deposit >= 0), duration_days INTEGER NOT NULL CHECK(duration_days BETWEEN 1 AND 30),
+  due_at INTEGER NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('reserved','active','return_pending','completed','cancelled','disputed')),
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS rentals_parties ON rentals(campus_id,renter_id,seller_id);
 CREATE TABLE IF NOT EXISTS services (
   id TEXT PRIMARY KEY, campus_id TEXT NOT NULL REFERENCES campuses(id), provider_id TEXT NOT NULL REFERENCES users(id),
   title TEXT NOT NULL, description TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount > 0),

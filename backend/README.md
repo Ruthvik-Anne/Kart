@@ -33,7 +33,7 @@ python -m unittest discover -s tests -v
 | Linked pickup | Task creator links their own order; work waits for readiness. Only the assigned student can obtain a pickup credential. |
 | Shops | Campus vendor organizations, catalogs, stock, idempotent single-store checkout, vendor preparation queue, credential-based collection, pre-preparation refunds. Canteen, stationery and merchandise use this product flow. |
 | Xerox | Private PDF queue with page/copy/colour/duplex/binding pricing, scoped document download, preparation states, pickup credentials and early cancellation refunds. Development files are stored on the backend volume. |
-| Student sale | Listing, reservation, buyer-confirmed handover, cancellation or refund. Rental dates and returns are not implemented. |
+| Student market | Sales with reserved KC and buyer-confirmed handover; rentals with duration limits, fee, deposit, return confirmation, cancellation and dispute resolution. |
 | Services | Student offerings, funded booking, provider submission, buyer approval, cancellation and administrator dispute resolution. |
 | Events | Club events, capped registration, paid/free tickets and one-time organizer check-in. |
 | KC ledger | Paired append-only postings, derived balances, idempotency keys, atomic reserves/releases/refunds. Test grants have no monetary backing. |
