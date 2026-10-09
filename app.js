@@ -1,176 +1,649 @@
-const STORE = 'kart-demo-v1';
-const futureDate = days => new Date(Date.now()+days*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short'});
-const futureTime = hours => new Date(Date.now()+hours*3600000).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit'});
-const products = [
-  {id:'f1',type:'food',name:'Masala Dosa Combo',vendor:'Campus Bites',price:85,icon:'🥘',desc:'Crisp dosa, chutney and filter coffee',tag:'Popular'},
-  {id:'f2',type:'food',name:'Paneer Rice Bowl',vendor:'Green Plate',price:120,icon:'🍛',desc:'A filling lunch between classes',tag:'Fresh today'},
-  {id:'f3',type:'food',name:'Cold Coffee',vendor:'Campus Bites',price:65,icon:'🥤',desc:'Made to order, ready in 10 minutes',tag:'Quick pickup'},
-  {id:'s1',type:'stationery',name:'Engineering Drawing Kit',vendor:'Scholars Store',price:340,icon:'📐',desc:'Tools for your first year drawing lab',tag:'In stock'},
-  {id:'s2',type:'stationery',name:'A4 Lab Record Bundle',vendor:'Scholars Store',price:180,icon:'📚',desc:'Three lab records and a graph notebook',tag:'Course bundle'},
-  {id:'s3',type:'stationery',name:'Scientific Calculator',vendor:'Campus Supplies',price:790,icon:'🧮',desc:'Non-programmable exam-approved model',tag:'Only 8 left'},
-  {id:'m1',type:'merch',name:'KART Campus Hoodie',vendor:'Print House',price:699,icon:'👕',desc:'Custom colors and sizes available',tag:'Customizable'},
-  {id:'m2',type:'merch',name:'Club Event Badges',vendor:'Print House',price:150,icon:'🏷️',desc:'Set of ten personalized badges',tag:'Bulk friendly'},
-  {id:'r1',type:'resale',name:'Data Structures Textbook',vendor:'Ananya R.',price:420,icon:'📕',desc:'Second year edition, very good condition',tag:'Pre-loved'},
-  {id:'r2',type:'resale',name:'Cycle for Rent',vendor:'Aditya S.',price:100,icon:'🚲',desc:'Daily rental near the main gate',tag:'Rental / day'}
-];
-const events = [
-  {id:'e1',name:'Hack the Campus',host:'Coding Club',date:futureDate(9),place:'Innovation Hall',price:120,icon:'💻',seats:48,desc:'A one-day build sprint for practical campus ideas.'},
-  {id:'e2',name:'Design After Dark',host:'Design Society',date:futureDate(15),place:'Auditorium B',price:0,icon:'🎨',seats:120,desc:'Talks, portfolios and hands-on design exercises.'},
-  {id:'e3',name:'Founders Friday',host:'Entrepreneurship Cell',date:futureDate(22),place:'Seminar Room 2',price:80,icon:'🎤',seats:75,desc:'Student founders share what they learned building products.'}
-];
-const services = [
-  {id:'v1',name:'Math & Physics Tutoring',provider:'Riya M.',price:250,unit:'hour',icon:'📖',rating:'4.9',desc:'One-on-one help for first year courses.'},
-  {id:'v2',name:'Poster & Slide Design',provider:'Nikhil K.',price:400,unit:'project',icon:'🎨',rating:'4.8',desc:'Clean posters and presentations for campus events.'},
-  {id:'v3',name:'Event Photography',provider:'Tara S.',price:600,unit:'hour',icon:'📸',rating:'5.0',desc:'Photos for clubs, talks and celebrations.'}
-];
-const modules = [
-  ['food','🍽️','Canteen & Food','Order meals for pickup'],
-  ['xerox','🖨️','Xerox & Print','Documents made easy'],
-  ['stationery','📐','Academic Supplies','Everything for class'],
-  ['tasks','⚡','Task Marketplace','Earn and get help'],
-  ['resale','🔄','Buy / Sell / Rent','Campus-to-campus deals'],
-  ['events','🎟️','Events & Tickets','See what’s happening'],
-  ['merch','👕','Custom Merchandise','Make it yours'],
-  ['services','✨','Student Services','Skills from peers']
-];
-const initial = () => ({
-  role:'Student',balance:2315,cart:[],orders:[{id:'KRT-1042',type:'food',title:'Masala Dosa Combo',vendor:'Campus Bites',amount:85,status:'Ready for pickup',created:'Demo sample'}],
-  tasks:[{id:'T-208',title:'Collect my printouts from Library Xerox',description:'Three bound copies are ready. Please bring them to the engineering block.',budget:90,deadline:futureTime(3),category:'Pickup',poster:'Anonymous student',urgent:true,status:'Open',bids:[]},{id:'T-209',title:'Help format a lab presentation',description:'Need a clean 10-slide presentation for the electronics lab.',budget:350,deadline:futureTime(30),category:'Digital',poster:'Meera P.',urgent:false,status:'Open',bids:[]},{id:'T-210',title:'Pick up stationery from main gate',description:'Collect a reserved calculator and deliver it to Hostel C.',budget:110,deadline:futureTime(6),category:'Delivery',poster:'Arjun K.',urgent:false,status:'Open',bids:[]}],
-  tickets:[],bookings:[],messages:[],transactions:[{id:'TX-1002',title:'Food order · Masala Dosa Combo',amount:-85,date:'Demo sample',type:'debit'},{id:'TX-1001',title:'Welcome demo credits',amount:2400,date:'Demo sample',type:'credit'}],listings:[],serviceListings:[],notifications:[]
-});
-let state;
-try { state = {...initial(),...JSON.parse(localStorage.getItem(STORE)||'{}')}; } catch { state = initial(); }
-if (!['Student','Vendor','Organizer','Admin'].includes(state.role)) state.role = 'Student';
-for (const key of ['cart','orders','tasks','tickets','bookings','messages','transactions','listings','serviceListings','notifications']) {
-  if (!Array.isArray(state[key])) state[key] = initial()[key];
+/* KART — router, interaction wiring, keyboard shortcuts */
+
+const ui = {
+  menu: false, drawer: null, modal: null, palette: false, help: false,
+  query: '', searchOpen: false, focusSearch: false, caret: 0,
+  explore: { cat: 'all', sort: 'featured', max: 1000, stock: false, minRating: 0, view: 'grid' },
+  taskTab: 'discover', orderTab: 'orders', orderStatus: 'all',
+  serviceTab: 'browse', resaleTab: 'all', walletCat: 'All', notifTab: 'all',
+  eventCat: 'all', productTab: 'reviews', pdpQty: 1,
+  checkout: { step: 1, mode: 'Pickup', slot: PICKUP_SLOTS[0], note: '', payment: 'KC balance' },
+  thread: [], toastTimer: null, pendingAction: ''
+};
+
+const VIEWS = {
+  home: homePage, explore: explorePage, search: searchPage, product: productPage,
+  checkout: checkoutPage, orders: ordersPage, order: orderPage, tasks: tasksPage,
+  task: taskPage, events: eventsPage, services: servicesPage, resale: resalePage,
+  wishlist: wishlistPage, wallet: walletPage, notifications: notificationsPage,
+  profile: profilePage, workspace: workspacePage
+};
+
+let route = { name: 'home', id: '', query: {} };
+
+function parseHash(hash) {
+  const raw = String(hash || (typeof location !== 'undefined' ? location.hash : '') || '#/home').replace(/^#\/?/, '');
+  const [path, qs] = raw.split('?');
+  const segments = path.split('/').filter(Boolean);
+  const query = {};
+  String(qs || '').split('&').filter(Boolean).forEach(pair => {
+    const [key, value = ''] = pair.split('=');
+    query[decodeURIComponent(key)] = decodeURIComponent(value);
+  });
+  return { name: segments[0] || 'home', id: segments[1] || '', query };
 }
-if (!Number.isFinite(state.balance) || state.balance < 0) state.balance = initial().balance;
-let page = 'home', filter = 'all', search = '', modal = null, taskTab = 'discover', orderTab = 'my', toastTimer, mobileOpen = false;
-const $ = s => document.querySelector(s);
-const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const kc = n => `${Number(n||0).toLocaleString('en-IN')} KC`;
-const now = () => new Date().toLocaleString('en-IN',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit'});
-const uid = p => `${p}-${Math.floor(1000+Math.random()*9000)}`;
-const save = () => {try {localStorage.setItem(STORE,JSON.stringify(state));} catch {notify('Browser storage is unavailable; changes will last until this tab closes.');}};
-function notify(message){let el=$('.toast');if(el)el.remove();el=document.createElement('div');el.className='toast';el.textContent=message;document.body.append(el);clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.remove(),3200);}
-function transact(title,amount){if(!Number.isFinite(amount))return false;state.balance+=amount;state.transactions.unshift({id:uid('TX'),title,amount,date:now(),type:amount>=0?'credit':'debit'});return true;}
-function spend(amount,title){if(!Number.isInteger(amount)||amount<=0){notify('Enter a valid KC amount.');return false;}if(state.balance<amount){notify('Not enough demo KC for this action.');return false;}transact(title,-amount);return true;}
-const allServices = () => [...state.serviceListings,...services];
-const cartLines = () => state.cart.map(item => {
-  const entry=typeof item==='string'?{id:item,option:'',quantity:1}:item;
-  const quantity=Number(entry?.quantity);
-  return {product:products.find(p=>p.id===entry?.id),option:entry?.option||'',quantity:Number.isInteger(quantity)&&quantity>=1&&quantity<=50?quantity:1};
-}).filter(line=>line.product);
-const iconFor = type => ({food:'🍽️',xerox:'🖨️',stationery:'📐',tasks:'⚡',resale:'🔄',events:'🎟️',merch:'👕',services:'✨'})[type]||'✦';
-function navItem(id,icon,label,count=''){return `<button class="nav-link ${page===id?'active':''}" data-page="${id}"><span class="nav-icon">${icon}</span>${label}${count?`<span class="nav-count">${count}</span>`:''}</button>`;}
-function shell(content){return `<div class="app"><aside class="sidebar ${mobileOpen?'open':''}"><div class="brand"><span class="brand-mark">K</span><div>KART<small>CAMPUS, CONNECTED</small></div></div><div class="nav-group"><div class="nav-caption">Campus</div>${navItem('home','▦','Dashboard')}${navItem('explore','⌕','Explore')}${navItem('tasks','⚡','Tasks',state.tasks.filter(t=>t.status==='Open').length)}${navItem('orders','◫','My Orders')}${navItem('wallet','◉','KC Wallet')}</div><div class="nav-group"><div class="nav-caption">More for you</div>${navItem('events','◇','Events')}${navItem('services','✦','Student Services')}${navItem('resale','⇄','Buy / Sell / Rent')}${navItem('workspace','▤',state.role==='Student'?'My Workspace':state.role+' Console')}</div><div class="side-bottom"><div class="campus-card"><strong>🏛️ Your campus community</strong><p>One place to discover, order, earn and connect.</p></div><div class="side-profile"><div class="avatar">${state.role==='Student'?'AS':state.role.slice(0,1)}</div><div><b>${state.role==='Student'?'Alex Sharma':state.role+' view'}</b><span>Verified campus member</span></div></div></div></aside><main class="main"><header class="topbar"><button class="icon-btn mobile-menu" data-action="menu" aria-label="Open menu">☰</button><label class="top-search"><span>⌕</span><input id="global-search" placeholder="Search campus products, tasks, events..." value="${esc(search)}" aria-label="Search KART" /></label><div class="top-actions"><button class="pill" data-page="explore">📍 Main Campus</button><button class="pill wallet-pill" data-page="wallet">◉ ${kc(state.balance)}</button><button class="icon-btn" data-action="cart" aria-label="Open cart">🛒${state.cart.length?`<sup>${state.cart.length}</sup>`:''}</button><button class="icon-btn" data-action="profile" aria-label="Profile options">⋮</button></div></header><div class="content">${content}</div></main></div>${modal?renderModal():''}`;}
-function heading(kicker,title,subtitle='',action=''){return `<div class="page-head"><div><div class="eyebrow">${kicker}</div><h1>${title}</h1>${subtitle?`<p>${subtitle}</p>`:''}</div>${action}</div>`;}
-function moduleCards(){return `<div class="grid module-grid">${modules.map(([id,icon,title,sub])=>`<button class="module" data-page="${id==='food'||id==='stationery'||id==='merch'||id==='xerox'?'explore':id}" data-filter="${id}"><div class="mod-icon">${icon}</div><strong>${title}</strong><span>${sub} →</span></button>`).join('')}</div>`;}
-function productCard(p){const mine=p.mine||p.id.startsWith('L-');return `<article class="product"><div class="product-art">${p.icon}</div><div class="product-body"><div class="eyebrow">${esc(p.vendor||'You')} · ${esc(p.tag||p.condition||'Available')}</div><h3>${esc(p.name)}</h3><p>${esc(p.desc)}</p><div class="product-foot"><span class="price">${kc(p.price)}</span>${mine?'<span class="status">Your listing</span>':`<button class="btn small" data-action="${p.id==='r2'?'rent':'add'}" data-id="${p.id}">${p.id==='r2'?'Choose dates':p.type==='merch'?'Choose options':'Add to cart +'}</button>`}</div></div></article>`;}
-function taskCard(t){return `<article class="task-card"><div class="task-top"><div><span class="status ${t.urgent?'warn':'blue'}">${t.urgent?'⚡ Urgent':esc(t.category)}</span><h3>${esc(t.title)}</h3></div><span class="status ${t.status==='Open'?'':'blue'}">${esc(t.status)}</span></div><p>${esc(t.description)}</p><div class="task-meta"><span>◷ ${esc(t.deadline)}</span><span>♙ ${esc(t.poster==='You'&&t.anonymous?'Anonymous (you)':t.poster)}</span><span>◇ ${t.bids.length} bid${t.bids.length===1?'':'s'}</span></div><div class="task-bottom"><strong>${kc(t.budget)}</strong><button class="btn small secondary" data-action="task" data-id="${t.id}">View details →</button></div></article>`;}
-function activity(icon,title,sub,end){return `<div class="activity"><div class="activity-icon">${icon}</div><div class="activity-body"><b>${esc(title)}</b><span>${esc(sub)}</span></div><div class="activity-end">${end}</div></div>`;}
-function home(){let date=new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'}),greeting=new Date().getHours()<12?'Good morning':new Date().getHours()<17?'Good afternoon':'Good evening';return `${heading(date,`${greeting}, Alex 👋`,'Everything you need on campus, all in one place.')}<div class="hero"><div class="hero-main"><div class="eyebrow">YOUR CAMPUS, SIMPLIFIED</div><h2>Make the most of every campus moment.</h2><p>Grab lunch, print notes, book a service or earn KC helping another student.</p><button class="btn" data-page="explore">Explore the marketplace ↗</button></div><div class="hero-aside"><div><div class="eyebrow">⚡ GET THINGS DONE</div><h3>Need a hand? Post a task.</h3><p>Find a verified student for pickups, projects and everything in between.</p></div><a class="text-link" data-action="post-task">Post a task →</a></div></div><div class="section-title"><h2>Explore KART</h2><a data-page="explore">See everything →</a></div>${moduleCards()}<div class="section-title"><h2>Picked for your day</h2><a data-page="explore">Browse marketplace →</a></div><div class="grid two-col"><section class="panel"><h3>Popular right now</h3>${products.slice(0,3).map(p=>activity(p.icon,p.name,`${p.vendor} · ${p.tag}`,kc(p.price))).join('')}</section><section class="panel"><h3>Your activity</h3>${state.orders.slice(0,2).map(o=>activity(iconFor(o.type),o.title,`${o.id} · ${o.created}`,`<span class="status">${esc(o.status)}</span>`)).join('')||'<div class="empty">No orders yet</div>'}<button class="btn secondary small full" data-page="orders">View all activity →</button></section></div>`;}
-function explore(){
-  const types=[['all','All'],['food','Food'],['xerox','Xerox'],['stationery','Supplies'],['merch','Merch'],['resale','Buy / Sell'],['events','Events'],['services','Services'],['tasks','Tasks']];
-  const query=search.trim().toLowerCase();
-  const matches=products.filter(p=>(filter==='all'||filter===p.type)&&`${p.name} ${p.vendor} ${p.desc}`.toLowerCase().includes(query));
-  const listings=state.listings.filter(p=>(filter==='all'||filter==='resale')&&`${p.name} ${p.desc}`.toLowerCase().includes(query));
-  const foundEvents=events.filter(e=>`${e.name} ${e.host} ${e.desc}`.toLowerCase().includes(query));
-  const foundServices=allServices().filter(s=>`${s.name} ${s.provider} ${s.desc}`.toLowerCase().includes(query));
-  const foundTasks=state.tasks.filter(t=>t.status==='Open'&&`${t.title} ${t.description}`.toLowerCase().includes(query));
-  const cards=(list,title,renderCard)=>list.length?`<div class="section-title"><h2>${title}</h2></div><div class="grid product-grid">${list.map(renderCard).join('')}</div>`:'';
-  const printCard=`<div class="panel" style="margin-bottom:18px"><h3>Print documents, your way</h3><p class="muted" style="font-size:12px">Choose pages, copies, color and binding. Your demo request will appear in My Orders.</p><button class="btn" data-action="print">Configure print request →</button></div>`;
-  let body='';
-  if(filter==='xerox') body=printCard;
-  else if(filter==='events') body=eventCards(foundEvents);
-  else if(filter==='services') body=serviceCards(foundServices);
-  else if(filter==='tasks') body=foundTasks.length?`<div class="grid two-col">${foundTasks.map(taskCard).join('')}</div>`:'';
-  else {
-    body=cards([...listings,...matches],query?'Products and listings':'Campus picks',productCard);
-    if(filter==='all'&&query){
-      body+=cards(foundEvents,'Events',eventCard);
-      body+=cards(foundServices,'Student services',serviceCard);
-      if(foundTasks.length) body+=`<div class="section-title"><h2>Tasks</h2></div><div class="grid two-col">${foundTasks.map(taskCard).join('')}</div>`;
-      if('xerox print documents printing'.includes(query)) body+=printCard;
+
+function applyRoute() {
+  route = parseHash();
+  if (!VIEWS[route.name]) route = { name: 'home', id: '', query: {} };
+  if (route.query.cat && EXPLORE_CATS.some(c => c[0] === route.query.cat)) ui.explore.cat = route.query.cat;
+  if (route.query.q !== undefined) ui.query = route.query.q;
+  if (route.name !== 'explore' && route.name !== 'search' && route.query.q === undefined && route.query.cat === undefined) ui.searchOpen = false;
+}
+
+function navigate(hash) {
+  if (!/[?&]q=/.test(hash)) ui.query = '';
+  if (typeof location !== 'undefined' && location.hash !== hash) location.hash = hash;
+  applyRoute();
+  ui.menu = false;
+  ui.drawer = null;
+  ui.modal = null;
+  ui.palette = false;
+  ui.help = false;
+  ui.pdpQty = 1;
+  render();
+  if (typeof window !== 'undefined' && window.scrollTo) window.scrollTo(0, 0);
+}
+
+function openDrawer(name) { ui.drawer = ui.drawer === name ? null : name; ui.menu = false; render(); }
+function openModal(kind, id = '', data = null) { ui.modal = { kind, id, data }; ui.drawer = null; render(); focusModal(); }
+function closeModal() { ui.modal = null; render(); }
+
+function focusModal() {
+  setTimeout(() => {
+    const el = $('.modal input:not([type=checkbox]), .modal textarea, .modal button');
+    if (el && el.focus) el.focus();
+  }, 0);
+}
+
+function render() {
+  const view = VIEWS[route.name] || homePage;
+  const app = $('#app');
+  if (!app) return;
+  app.innerHTML = shell(view(route.id));
+  postRender();
+}
+
+function postRender() {
+  applyTheme(state.settings.theme);
+  const log = $('#chat-log');
+  if (log) log.scrollTop = log.scrollHeight;
+  if (ui.focusSearch) {
+    const input = $('#global-search');
+    if (input) {
+      input.focus();
+      try { input.setSelectionRange(ui.caret, ui.caret); } catch { /* ignore */ }
     }
+    ui.focusSearch = false;
   }
-  return `${heading('DISCOVER','Explore campus','Everything you need, right around the corner.',`<button class="btn secondary" data-action="print">🖨️ New print request</button>`)}<div class="filters">${types.map(([id,label])=>`<button class="filter ${filter===id?'active':''}" data-action="filter" data-filter="${id}">${label}</button>`).join('')}</div>${body||'<div class="search-empty">No matching items. Try another category or search.</div>'}`;
-}
-function eventCard(e){return `<article class="product"><div class="product-art">${e.icon}</div><div class="product-body"><div class="eyebrow">${esc(e.host)} · ${esc(e.date)}</div><h3>${esc(e.name)}</h3><p>${esc(e.desc)}</p><div class="product-foot"><span class="price">${e.price?kc(e.price):'Free'}</span><button class="btn small" data-action="event" data-id="${e.id}">Details →</button></div></div></article>`;}
-function eventCards(list=events.filter(e=>`${e.name} ${e.host} ${e.desc}`.toLowerCase().includes(search.toLowerCase()))){return list.length?`<div class="grid product-grid">${list.map(eventCard).join('')}</div>`:'<div class="search-empty">No matching events.</div>';}
-function serviceCard(s){return `<article class="product"><div class="product-art">${s.icon}</div><div class="product-body"><div class="eyebrow">${s.rating?`⭐ ${s.rating} · `:''}${esc(s.provider)}</div><h3>${esc(s.name)}</h3><p>${esc(s.desc)}</p><div class="product-foot"><span class="price">${kc(s.price)}<small class="muted"> / ${esc(s.unit)}</small></span>${s.mine?'<span class="status">Your service</span>':`<button class="btn small" data-action="service" data-id="${s.id}">Book →</button>`}</div></div></article>`;}
-function serviceCards(list=allServices().filter(s=>`${s.name} ${s.provider} ${s.desc}`.toLowerCase().includes(search.toLowerCase()))){return list.length?`<div class="grid product-grid">${list.map(serviceCard).join('')}</div>`:'<div class="search-empty">No matching services.</div>';}
-function tasksPage(){let visible=state.tasks.filter(t=>taskTab==='mine'?t.poster==='You':taskTab==='active'?t.status==='Assigned':taskTab==='history'?['Completed','Cancelled'].includes(t.status):t.status==='Open');if(search)visible=visible.filter(t=>`${t.title} ${t.description}`.toLowerCase().includes(search.toLowerCase()));return `${heading('TASK MARKETPLACE','Get help. Earn KC.','Small errands or big projects, find the right person.',`<button class="btn" data-action="post-task">+ Post a task</button>`)}<div class="stats grid"><div class="stat"><span>Open tasks</span><strong>${state.tasks.filter(t=>t.status==='Open').length}</strong><small>Across campus</small></div><div class="stat"><span>Urgent now</span><strong>${state.tasks.filter(t=>t.urgent&&t.status==='Open').length}</strong><small>Quick opportunities</small></div><div class="stat"><span>Your posted tasks</span><strong>${state.tasks.filter(t=>t.poster==='You').length}</strong><small>Manage progress</small></div><div class="stat"><span>Available KC</span><strong>${state.balance.toLocaleString('en-IN')}</strong><small>Demo credits</small></div></div><div class="tabs">${[['discover','Discover tasks'],['mine','My posts'],['active','In progress'],['history','History']].map(([id,label])=>`<button class="tab ${taskTab===id?'active':''}" data-action="task-tab" data-tab="${id}">${label}</button>`).join('')}</div>${visible.length?`<div class="grid two-col">${visible.map(taskCard).join('')}</div>`:'<div class="empty"><strong>Nothing here yet</strong>New tasks and updates will appear here.</div>'}`;}
-function ordersPage(){let mine=orderTab==='my';let list=state.orders;return `${heading('YOUR ACTIVITY',mine?'My orders':'Pickup tickets','Track each request from placement to pickup.',`<button class="btn secondary" data-page="explore">Explore more →</button>`)}<div class="tabs"><button class="tab ${mine?'active':''}" data-action="order-tab" data-tab="my">Orders (${state.orders.length})</button><button class="tab ${!mine?'active':''}" data-action="order-tab" data-tab="tickets">Tickets (${state.tickets.length})</button></div>${mine?(list.length?`<div class="stack">${list.map(o=>`<div class="panel"><div class="row" style="justify-content:space-between"><div class="row"><div class="activity-icon">${iconFor(o.type)}</div><div><div class="eyebrow">${esc(o.id)} · ${esc(o.created)}</div><h3 style="margin:4px 0">${esc(o.title)}</h3><div class="muted" style="font-size:11px">${esc(o.vendor)}</div></div></div><span class="status ${o.status==='Cancelled'?'warn':''}">${esc(o.status)}</span></div><div class="task-bottom"><strong>${kc(o.amount)}</strong><div class="row"><button class="btn small secondary" data-action="order" data-id="${o.id}">View details</button>${o.status==='Placed'?`<button class="btn small secondary" data-action="cancel-order" data-id="${o.id}">Cancel</button>`:''}</div></div></div>`).join('')}</div>`:'<div class="empty"><strong>No orders yet</strong>Your orders will appear here after checkout.</div>'):(state.tickets.length?`<div class="grid product-grid">${state.tickets.map(t=>`<div class="panel"><div style="font-size:38px">🎟️</div><div class="eyebrow" style="margin-top:10px">${esc(t.id)}</div><h3>${esc(t.name)}</h3><p class="muted" style="font-size:11px">${esc(t.date)} · ${esc(t.place)}</p><div class="status">Confirmed</div></div>`).join('')}</div>`:'<div class="empty"><strong>No tickets yet</strong>Register for an event to see your tickets.</div>')}`;}
-function walletPage(){let committed=state.tasks.reduce((a,t)=>a+(t.committed||0),0);return `${heading('KART CREDITS','KC Wallet','Your demo campus balance and activity.')}<div class="notice">This wallet contains simulated KC. It cannot be topped up with real money, withdrawn, or used outside this prototype.</div><div class="wallet-hero"><div><span>Available balance</span><strong>${kc(state.balance)}</strong><small>Demo credits · browser-local</small></div><div style="font-size:53px;opacity:.5">◉</div></div><div class="stats grid"><div class="stat"><span>Earned / added</span><strong>${kc(state.transactions.filter(t=>t.amount>0).reduce((a,t)=>a+t.amount,0))}</strong></div><div class="stat"><span>Spent / reserved</span><strong>${kc(-state.transactions.filter(t=>t.amount<0).reduce((a,t)=>a+t.amount,0))}</strong></div><div class="stat"><span>Task commitments</span><strong>${kc(committed)}</strong><small>Simulated reservation only</small></div><div class="stat"><span>Transactions</span><strong>${state.transactions.length}</strong></div></div><div class="section-title"><h2>Transaction history</h2></div><div class="table-wrap"><table><thead><tr><th>Transaction</th><th>Date</th><th>Reference</th><th>Amount</th></tr></thead><tbody>${state.transactions.map(t=>`<tr><td><strong>${esc(t.title)}</strong></td><td>${esc(t.date)}</td><td>${esc(t.id)}</td><td class="${t.amount>=0?'money-plus':'money-minus'}">${t.amount>=0?'+':'−'}${kc(Math.abs(t.amount))}</td></tr>`).join('')}</tbody></table></div>`;}
-function eventsPage(){return `${heading('WHAT’S HAPPENING','Campus events','Discover clubs, workshops and memorable nights.')}${eventCards()}`;}
-function servicesPage(){return `${heading('SKILLS ON CAMPUS','Student services','Learn, create and collaborate with talented peers.',`<button class="btn secondary" data-action="offer-service">+ Offer a service</button>`)}${serviceCards()}${state.bookings.length?`<div class="section-title"><h2>Your bookings</h2></div><div class="grid two-col">${state.bookings.map(b=>`<div class="panel"><h3>${esc(b.name)}</h3><p class="muted" style="font-size:11px">${esc(b.provider)} · ${esc(b.date)}</p><div class="row" style="justify-content:space-between"><span class="status ${b.status==='Cancelled'?'warn':''}">${esc(b.status||'Requested')}</span>${b.status!=='Cancelled'?`<button class="btn secondary small" data-action="cancel-booking" data-id="${b.id}">Cancel & refund</button>`:''}</div></div>`).join('')}</div>`:''}`;}
-function resalePage(){let entries=[...state.listings.map(l=>({...l,tag:'Your listing',vendor:'You'})),...products.filter(p=>p.type==='resale')];return `${heading('PASS IT ON','Buy / Sell / Rent','Great things deserve a second campus life.',`<button class="btn" data-action="new-listing">+ Create listing</button>`)}<div class="grid product-grid">${entries.map(p=>p.id.startsWith('L-')?`<article class="product"><div class="product-art">${p.icon||'📦'}</div><div class="product-body"><div class="eyebrow">Your listing · ${esc(p.condition)}</div><h3>${esc(p.name)}</h3><p>${esc(p.desc)}</p><div class="product-foot"><span class="price">${kc(p.price)}</span><span class="status">Live demo</span></div></div></article>`:productCard(p)).join('')}</div>`;}
-function workspacePage(){let role=state.role;let opts=['Student','Vendor','Organizer','Admin'];return `${heading('YOUR SPACE',role==='Student'?'My workspace':`${role} console`,'Switch demo views to explore different campus roles.',`<select class="select" id="role-select" aria-label="Demo role">${opts.map(o=>`<option ${o===role?'selected':''}>${o}</option>`).join('')}</select>`)}<div class="notice">Role switching is for demonstration only. Production permissions require verified accounts and server enforcement.</div>${role==='Vendor'?vendorWorkspace():role==='Organizer'?organizerWorkspace():role==='Admin'?adminWorkspace():studentWorkspace()}`;}
-function studentWorkspace(){return `<div class="stats grid"><div class="stat"><span>Orders</span><strong>${state.orders.length}</strong></div><div class="stat"><span>Posted tasks</span><strong>${state.tasks.filter(t=>t.poster==='You').length}</strong></div><div class="stat"><span>Event tickets</span><strong>${state.tickets.length}</strong></div><div class="stat"><span>KC balance</span><strong>${state.balance}</strong></div></div><div class="grid two-col"><div class="panel"><h3>Quick actions</h3><div class="quick-row"><button class="btn secondary small" data-action="post-task">Post task</button><button class="btn secondary small" data-action="print">Print documents</button><button class="btn secondary small" data-action="new-listing">Sell an item</button><button class="btn secondary small" data-page="events">Find events</button></div></div><div class="panel"><h3>Student capabilities</h3><p class="muted" style="font-size:12px;line-height:1.6">One verified student identity can shop, offer services, post tasks and complete work. Your listings and bookings stay together here.</p></div></div>`;}
-function vendorWorkspace(){let list=state.orders.filter(o=>['food','stationery','merch','xerox'].includes(o.type));return `<div class="stats grid"><div class="stat"><span>Orders</span><strong>${list.length}</strong></div><div class="stat"><span>New</span><strong>${list.filter(o=>o.status==='Placed').length}</strong></div><div class="stat"><span>Preparing</span><strong>${list.filter(o=>o.status==='Preparing').length}</strong></div><div class="stat"><span>Ready</span><strong>${list.filter(o=>o.status==='Ready for pickup').length}</strong></div></div><div class="section-title"><h2>Preparation queue</h2></div><div class="stack">${list.map(o=>`<div class="panel"><div class="row" style="justify-content:space-between"><div><div class="eyebrow">${esc(o.id)} · ${esc(o.type)}</div><h3 style="margin:5px 0">${esc(o.title)}</h3><span class="muted" style="font-size:11px">${esc(o.vendor)} · ${kc(o.amount)}</span></div><div class="row"><span class="status">${esc(o.status)}</span>${o.status==='Placed'?`<button class="btn small" data-action="advance-order" data-id="${o.id}">Start preparing</button>`:o.status==='Preparing'?`<button class="btn small" data-action="advance-order" data-id="${o.id}">Mark ready</button>`:''}</div></div></div>`).join('')||'<div class="empty">No orders in the queue.</div>'}</div>`;}
-function organizerWorkspace(){return `<div class="stats grid"><div class="stat"><span>Demo events</span><strong>${events.length}</strong></div><div class="stat"><span>Issued tickets</span><strong>${state.tickets.length}</strong></div><div class="stat"><span>Upcoming</span><strong>${events.length}</strong></div><div class="stat"><span>Capacity</span><strong>${events.reduce((a,e)=>a+e.seats,0)}</strong></div></div><div class="grid product-grid">${events.map(e=>`<div class="panel"><div style="font-size:36px">${e.icon}</div><h3 style="margin-top:10px">${esc(e.name)}</h3><p class="muted" style="font-size:11px">${esc(e.host)} · ${esc(e.date)} · ${e.seats} seats</p><span class="status">Published demo</span></div>`).join('')}</div>`;}
-function adminWorkspace(){return `<div class="stats grid"><div class="stat"><span>Marketplace items</span><strong>${products.length}</strong></div><div class="stat"><span>Open tasks</span><strong>${state.tasks.filter(t=>t.status==='Open').length}</strong></div><div class="stat"><span>Demo orders</span><strong>${state.orders.length}</strong></div><div class="stat"><span>Events</span><strong>${events.length}</strong></div></div><div class="panel"><h3>Production controls required</h3><p class="muted" style="font-size:12px;line-height:1.7">Campus and platform administration will need server-verified roles, audited moderation actions, vendor onboarding, financial reconciliation, and operational alerts. This prototype displays the scope without granting real administrative power.</p></div>`;}
-function render(){let views={home,explore,tasks:tasksPage,orders:ordersPage,wallet:walletPage,events:eventsPage,services:servicesPage,resale:resalePage,workspace:workspacePage};$('#app').innerHTML=shell((views[page]||home)());document.querySelectorAll('a[data-page],a[data-action]').forEach(link=>{link.tabIndex=0;link.setAttribute('role','button');});}
-function modalFrame(title,body,foot=''){return `<div class="overlay" data-action="close-overlay"><div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="modal-head"><h2>${esc(title)}</h2><button class="icon-btn" data-action="close" aria-label="Close dialog">×</button></div><div class="modal-body">${body}</div>${foot?`<div class="modal-foot">${foot}</div>`:''}</div></div>`;}
-function renderModal(){if(!modal)return '';let {kind,id}=modal;
-  if(kind==='cart'){let lines=cartLines(),total=lines.reduce((a,line)=>a+line.product.price*line.quantity,0);return modalFrame('Your cart',lines.length?`${lines.map(({product:p,option,quantity},i)=>`<div class="cart-line"><div class="cart-art">${p.icon}</div><div class="cart-info"><b>${esc(p.name)}</b><small>${esc(p.vendor)} · ${quantity} × ${kc(p.price)}${option?` · ${esc(option)}`:''}</small></div><button data-action="remove-cart" data-index="${i}">Remove</button></div>`).join('')}<div class="detail-item" style="padding:16px 0"><strong>Total</strong><strong>${kc(total)}</strong></div><form id="checkout-form" class="stack"><label class="field">Pickup window<select name="window"><option>As soon as ready</option><option>12:30 PM – 1:00 PM</option><option>1:00 PM – 1:30 PM</option><option>4:00 PM – 4:30 PM</option></select></label><button class="btn full" type="submit">Place demo order · ${kc(total)}</button></form><p class="footnote">Demo KC only. A separate order is created for each item.</p>`:'<div class="empty"><strong>Your cart is empty</strong>Explore campus picks and add something you like.</div>');}
-  if(kind==='customize'){let p=products.find(x=>x.id===id&&x.type==='merch');if(!p)return '';return modalFrame(`Choose options · ${p.name}`,`<p class="muted" style="font-size:12px">${esc(p.desc)}. Choose options for this demo order. Custom artwork upload and vendor quote approval are not available yet.</p><form id="customize-form" data-id="${p.id}" class="form-grid"><label class="field">Color<select name="color"><option>Forest green</option><option>Black</option><option>White</option><option>College blue</option></select></label><label class="field">Size<select name="size"><option>Standard</option><option>Small</option><option>Medium</option><option>Large</option><option>Extra large</option></select></label><label class="field wide">Quantity<input name="quantity" type="number" min="1" max="50" value="1" required /></label><button class="btn wide" type="submit">Add configured item to cart</button></form>`);}
-  if(kind==='rent'){let p=products.find(x=>x.id===id);if(!p)return '';return modalFrame(`Rent ${p.name}`,`<p class="muted" style="font-size:12px">${kc(p.price)} per day from ${esc(p.vendor)}. Choose a rental period for this demo request.</p><form id="rent-form" data-id="${p.id}" class="form-grid"><label class="field">Start date<input name="start" type="date" required /></label><label class="field">End date<input name="end" type="date" required /></label><button class="btn wide" type="submit">Request demo rental</button></form><p class="footnote">Handover confirmation and refundable deposits are not included in this prototype.</p>`);}
-  if(kind==='profile')return modalFrame('Profile & demo controls',`<div class="stack"><div class="mini-card"><b>Alex Sharma</b><p>Verified campus member · Main Campus</p></div><label class="field">Explore as<select id="role-modal-select">${['Student','Vendor','Organizer','Admin'].map(o=>`<option ${state.role===o?'selected':''}>${o}</option>`).join('')}</select></label><button class="btn secondary" data-action="reset">Reset demo data</button><p class="footnote">Switching views does not provide real permissions. All data is stored in this browser.</p></div>`);
-  if(kind==='print')return modalFrame('New print request',`<div class="notice">This demo saves request details only. Do not upload sensitive documents; files are not stored or sent to a printer.</div><form id="print-form" class="form-grid"><label class="field wide">Document name<input name="document" required maxlength="80" placeholder="e.g. Physics lab report.pdf" /></label><label class="field">Pages<input name="pages" type="number" min="1" max="500" value="10" required /></label><label class="field">Copies<input name="copies" type="number" min="1" max="20" value="1" required /></label><label class="field">Color<select name="color"><option value="bw">Black & white</option><option value="color">Color</option></select></label><label class="field">Sides<select name="sides"><option value="single">Single-sided</option><option value="duplex">Double-sided</option></select></label><label class="field">Binding<select name="binding"><option value="none">No binding</option><option value="spiral">Spiral binding (+30 KC)</option></select></label><label class="field">Pickup shop<select name="shop"><option>Library Xerox</option><option>Print House</option></select></label><button class="btn wide" type="submit">Create demo print request</button></form><p class="footnote">Estimate: 2 KC per black & white page, 8 KC per color page, plus optional binding.</p>`);
-  if(kind==='post-task')return modalFrame('Post a task',`<form id="task-form" class="form-grid"><label class="field wide">Task title<input name="title" required maxlength="80" placeholder="What do you need done?" /></label><label class="field wide">Details<textarea name="description" required maxlength="500" placeholder="Describe the task and completion criteria"></textarea></label><label class="field">Budget in KC<input name="budget" type="number" min="1" max="100000" required /></label><label class="field">Deadline<input name="deadline" type="datetime-local" required /></label><label class="field">Category<select name="category"><option>Pickup</option><option>Delivery</option><option>Digital</option><option>Academic help</option><option>Other</option></select></label><label class="field">Visibility<select name="anonymous"><option value="public">Public profile</option><option value="anonymous">Anonymous to bidders</option></select></label><label class="field wide" style="display:flex;align-items:center;gap:8px"><input name="urgent" type="checkbox" style="width:auto" /> Mark as urgent</label><button class="btn wide" type="submit">Publish demo task</button></form><p class="footnote">No KC is committed until a bid is accepted. Identity masking here is visual only.</p>`);
-  if(kind==='task'){
-    let t=state.tasks.find(x=>x.id===id);if(!t)return '';
-    let actions=t.poster==='You'&&['Open','Assigned'].includes(t.status)?`<div class="row" style="margin-top:15px">${t.status==='Assigned'?`<button class="btn small" data-action="complete-task" data-id="${t.id}">Approve completion</button>`:''}<button class="btn small secondary" data-action="cancel-task" data-id="${t.id}">Cancel task</button></div>`:'';
-    return modalFrame(t.title,`<div class="row" style="margin-bottom:13px"><span class="status ${t.urgent?'warn':''}">${t.urgent?'Urgent':esc(t.category)}</span><span class="status blue">${esc(t.status)}</span></div><p class="muted" style="font-size:12px;line-height:1.6">${esc(t.description)}</p><div class="detail-list"><div class="detail-item"><span>Budget</span><strong>${kc(t.budget)}</strong></div><div class="detail-item"><span>Deadline</span><strong>${esc(t.deadline)}</strong></div><div class="detail-item"><span>Posted by</span><strong>${esc(t.poster==='You'&&t.anonymous?'Anonymous (you)':t.poster)}</strong></div>${t.committed?`<div class="detail-item"><span>Committed</span><strong>${kc(t.committed)}</strong></div>`:''}</div><div class="section-title"><h2>Bids (${t.bids.length})</h2></div>${t.bids.length?t.bids.map(b=>`<div class="mini-card" style="margin-bottom:9px"><div class="row" style="justify-content:space-between"><b>${esc(b.worker)} · ${kc(b.amount)}</b>${t.poster==='You'&&t.status==='Open'?`<button class="btn small" data-action="accept-bid" data-id="${t.id}" data-bid="${b.id}">Accept & commit KC</button>`:''}</div><p>${esc(b.note)}</p></div>`).join(''):'<div class="empty">No bids yet.</div>'}${t.status==='Open'&&t.poster!=='You'?`<form id="bid-form" data-id="${t.id}" class="form-grid" style="margin-top:18px"><label class="field">Your bid (KC)<input name="amount" type="number" min="1" max="100000" value="${t.budget}" required /></label><label class="field">Your ETA<input name="eta" maxlength="60" placeholder="e.g. Today, 5 PM" required /></label><label class="field wide">Proposal<textarea name="note" maxlength="250" required placeholder="How will you complete it?"></textarea></label><button class="btn wide" type="submit">Submit demo bid</button></form>`:''}${actions}<div class="row" style="margin-top:16px"><button class="btn secondary small" data-action="messages" data-id="${t.id}">Open conversation →</button></div><p class="footnote">Task commitments are simulated. Completion does not transfer real funds.</p>`);
+  if (ui.palette) {
+    const paletteInput = $('#palette-input');
+    if (paletteInput) paletteInput.focus();
   }
-  if(kind==='messages'){let t=state.tasks.find(x=>x.id===id),list=state.messages.filter(m=>m.taskId===id);return modalFrame(`Conversation · ${t?.title||'Task'}`,`<div style="max-height:270px;overflow:auto">${list.length?list.map(m=>`<div class="message ${m.mine?'mine':''}">${esc(m.text)}<small>${m.mine?'You':'Student'} · ${esc(m.date)}</small></div>`).join(''):'<div class="empty">No messages yet. Start a task conversation.</div>'}</div><form id="message-form" data-id="${id}" class="row" style="margin-top:15px"><input name="text" required maxlength="500" placeholder="Write a message..." style="flex:1;min-width:150px;padding:10px;border:1px solid #dce7db;border-radius:9px" /><button class="btn small" type="submit">Send</button></form><p class="footnote">Messages are local to this browser, not private server-side threads.</p>`);}
-  if(kind==='event'){let e=events.find(x=>x.id===id);if(!e)return '';let registered=state.tickets.some(t=>t.eventId===id);return modalFrame(e.name,`<div style="font-size:58px;text-align:center;background:#f0f5eb;border-radius:12px;padding:12px">${e.icon}</div><p class="muted" style="font-size:12px;line-height:1.6">${esc(e.desc)}</p><div class="detail-list"><div class="detail-item"><span>Hosted by</span><b>${esc(e.host)}</b></div><div class="detail-item"><span>Date</span><b>${esc(e.date)}</b></div><div class="detail-item"><span>Venue</span><b>${esc(e.place)}</b></div><div class="detail-item"><span>Ticket</span><b>${e.price?kc(e.price):'Free'}</b></div><div class="detail-item"><span>Capacity</span><b>${e.seats} seats</b></div></div><button class="btn full" style="margin-top:17px" data-action="register-event" data-id="${e.id}" ${registered?'disabled':''}>${registered?'Already registered':e.price?`Register · ${kc(e.price)}`:'Register for free'}</button><p class="footnote">Tickets in this demo are local records. QR check-in is not enabled.</p>`);}
-  if(kind==='service'){let s=allServices().find(x=>x.id===id);if(!s||s.mine)return '';return modalFrame(`Book ${s.name}`,`<p class="muted" style="font-size:12px">${esc(s.desc)} · ${esc(s.provider)}${s.rating?` · ⭐ ${s.rating}`:''}</p><div class="notice">A demo booking request charges ${kc(s.price)} from your simulated wallet. No provider receives funds.</div><form id="service-form" data-id="${s.id}" class="form-grid"><label class="field">Preferred date<input name="date" type="date" required /></label><label class="field">Preferred time<input name="time" type="time" required /></label><label class="field wide">What do you need?<textarea name="note" required maxlength="350" placeholder="Briefly describe your request"></textarea></label><button class="btn wide" type="submit">Request booking · ${kc(s.price)}</button></form>`);}
-  if(kind==='new-listing')return modalFrame('Create a listing',`<form id="listing-form" class="form-grid"><label class="field wide">Item name<input name="name" required maxlength="70" /></label><label class="field">Price in KC<input name="price" type="number" min="1" max="100000" required /></label><label class="field">Condition<select name="condition"><option>Like new</option><option>Good</option><option>Used</option><option>For rent</option></select></label><label class="field wide">Description<textarea name="desc" required maxlength="250"></textarea></label><button class="btn wide" type="submit">Publish demo listing</button></form>`);
-  if(kind==='offer-service')return modalFrame('Offer a student service',`<div class="notice">Demo listings are visible only in this browser. Production publishing requires verified student profiles and review.</div><form id="offer-service-form" class="form-grid"><label class="field wide">Service title<input name="name" required maxlength="70" placeholder="e.g. Chemistry tutoring" /></label><label class="field">Price in KC<input name="price" type="number" min="1" max="100000" required /></label><label class="field">Price unit<select name="unit"><option value="hour">Per hour</option><option value="project">Per project</option><option value="session">Per session</option></select></label><label class="field wide">What you offer<textarea name="desc" required maxlength="250"></textarea></label><button class="btn wide" type="submit">Publish demo service</button></form>`);
-  if(kind==='order'){let o=state.orders.find(x=>x.id===id);if(!o)return '';return modalFrame(o.title,`<div class="detail-list"><div class="detail-item"><span>Order number</span><b>${esc(o.id)}</b></div><div class="detail-item"><span>Shop</span><b>${esc(o.vendor)}</b></div><div class="detail-item"><span>Placed</span><b>${esc(o.created)}</b></div><div class="detail-item"><span>Pickup window</span><b>${esc(o.window||'As soon as ready')}</b></div><div class="detail-item"><span>Status</span><b>${esc(o.status)}</b></div><div class="detail-item"><span>Total</span><b>${kc(o.amount)}</b></div></div><p class="footnote">Pickup authorization and handover codes are not enabled in this demo.</p>`);}
-  return '';
+  $$('[data-go]').forEach(el => { el.tabIndex = 0; if (!el.getAttribute('role')) el.setAttribute('role', 'link'); });
 }
-function show(kind,id){modal={kind,id};render();setTimeout(()=>$('.modal input:not([type=checkbox]),.modal button')?.focus(),0);}
-function close(){modal=null;render();}
-document.addEventListener('click',e=>{
-  const target=e.target.closest('[data-action],[data-page]');if(!target)return;
-  if(target.dataset.page){page=target.dataset.page;mobileOpen=false;if(target.dataset.filter)filter=target.dataset.filter;else if(page==='explore')filter='all';search='';modal=null;render();window.scrollTo(0,0);return;}
-  const a=target.dataset.action,id=target.dataset.id;
-  if(a==='close-overlay'&&e.target!==target)return;
-  if(a==='close'||a==='close-overlay'){close();return;}
-  if(a==='menu'){mobileOpen=!mobileOpen;render();return;}
-  if(a==='filter'){filter=target.dataset.filter;render();return;}
-  if(a==='task-tab'){taskTab=target.dataset.tab;render();return;}
-  if(a==='order-tab'){orderTab=target.dataset.tab;render();return;}
-  if(['cart','profile','print','post-task','task','messages','event','service','new-listing','offer-service','order','rent'].includes(a)){show(a,id);return;}
-  if(a==='add'){let p=products.find(x=>x.id===id);if(!p)return;if(p.type==='merch'){show('customize',id);return;}state.cart.push(id);save();render();notify(`${p.name} added to cart`);return;}
-  if(a==='remove-cart'){state.cart.splice(Number(target.dataset.index),1);save();render();return;}
-  if(a==='reset'){if(!confirm('Reset all demo orders, tasks, wallet activity and listings in this browser?'))return;state=initial();save();page='home';modal=null;render();notify('Demo data reset');return;}
-  if(a==='cancel-order'){let o=state.orders.find(x=>x.id===id);if(o?.status!=='Placed')return;o.status='Cancelled';transact(`Refund · ${o.title}`,o.amount);save();render();notify('Order cancelled and demo KC refunded');return;}
-  if(a==='cancel-booking'){let b=state.bookings.find(x=>x.id===id);if(!b||b.status==='Cancelled')return;let s=allServices().find(x=>x.name===b.name&&x.provider===b.provider),amount=b.amount||s?.price;b.status='Cancelled';if(Number.isInteger(amount)&&amount>0)transact(`Service refund · ${b.name}`,amount);save();render();notify('Booking cancelled and demo KC refunded');return;}
-  if(a==='advance-order'){let o=state.orders.find(x=>x.id===id);if(!o)return;o.status=o.status==='Placed'?'Preparing':o.status==='Preparing'?'Ready for pickup':o.status;save();render();notify(`Order ${o.status.toLowerCase()}`);return;}
-  if(a==='accept-bid'){let t=state.tasks.find(x=>x.id===id),b=t?.bids.find(x=>x.id===target.dataset.bid);if(!t||!b||t.poster!=='You'||t.status!=='Open')return;if(!spend(b.amount,`Task commitment · ${t.title}`))return;t.status='Assigned';t.acceptedBid=b;t.committed=b.amount;save();show('task',id);notify('Bid accepted and demo KC committed');return;}
-  if(a==='complete-task'){let t=state.tasks.find(x=>x.id===id);if(!t||t.status!=='Assigned'||t.poster!=='You')return;t.status='Completed';t.committed=0;state.transactions.unshift({id:uid('TX'),title:`Task payment released · ${t.title}`,amount:0,date:now(),type:'release'});save();show('task',id);notify('Demo task completion approved');return;}
-  if(a==='cancel-task'){let t=state.tasks.find(x=>x.id===id);if(!t||t.poster!=='You'||!['Open','Assigned'].includes(t.status))return;if(t.committed)transact(`Task refund · ${t.title}`,t.committed);t.committed=0;t.status='Cancelled';save();show('task',id);notify('Task cancelled and any committed demo KC refunded');return;}
-  if(a==='register-event'){let ev=events.find(x=>x.id===id);if(!ev||state.tickets.some(t=>t.eventId===id))return;if(ev.price&&!spend(ev.price,`Event ticket · ${ev.name}`))return;state.tickets.unshift({id:uid('TKT'),eventId:id,name:ev.name,date:ev.date,place:ev.place});save();close();notify('Your demo ticket is confirmed');return;}
+
+/* ---------- clicks ---------- */
+
+document.addEventListener('click', event => {
+  const el = event.target.closest('[data-act],[data-go],[data-drawer],[data-modal-close],[data-drawer-close],[data-palette-close],[data-help-close],[data-target]');
+  if (!el) {
+    const inside = event.target.closest('.drawer,.modal,.palette,.sidebar,.avatar-btn');
+    if (ui.drawer && !inside) { ui.drawer = null; render(); return; }
+    const pop = document.querySelector('.avatar-btn.open');
+    if (pop && !event.target.closest('.avatar-btn')) pop.classList.remove('open');
+    return;
+  }
+  const openPop = document.querySelector('.avatar-btn.open');
+  if (openPop && !event.target.closest('.avatar-btn') && el.dataset.act !== 'account') openPop.classList.remove('open');
+  if (el.dataset.target !== undefined) { runPalette(el.dataset.target); return; }
+  if (el.hasAttribute('data-modal-close')) { closeModal(); return; }
+  if (el.hasAttribute('data-drawer-close')) { ui.drawer = null; render(); return; }
+  if (el.hasAttribute('data-palette-close')) { ui.palette = false; render(); return; }
+  if (el.hasAttribute('data-help-close')) { ui.help = false; render(); return; }
+  if (el.dataset.drawer) { openDrawer(el.dataset.drawer); return; }
+
+  const act = el.dataset.act;
+  if (act) { handleAction(act, el, event); return; }
+  if (el.dataset.go) navigate(el.dataset.go);
 });
-document.addEventListener('change',e=>{if(e.target.id==='role-select'||e.target.id==='role-modal-select'){state.role=e.target.value;save();modal=null;page='workspace';render();}});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&modal){close();return;}if((e.key==='Enter'||e.key===' ')&&e.target.matches?.('a[data-page],a[data-action]')){e.preventDefault();e.target.click();}});
-document.addEventListener('input',e=>{if(e.target.id==='global-search'){const pos=e.target.selectionStart;search=e.target.value;if(page==='home')page='explore';render();const input=$('#global-search');input.focus();input.setSelectionRange(pos,pos);}});
-document.addEventListener('submit',e=>{
-  const form=e.target;if(!form.id)return;e.preventDefault();const data=Object.fromEntries(new FormData(form));
-  if(form.id==='checkout-form'){let lines=cartLines(),total=lines.reduce((a,line)=>a+line.product.price*line.quantity,0);if(!lines.length)return;if(!spend(total,`Marketplace order · ${lines.length} item${lines.length>1?'s':''}`))return;for(let {product:p,option,quantity} of lines)state.orders.unshift({id:uid('KRT'),type:p.type,title:`${p.name}${quantity>1?` × ${quantity}`:''}${option?` · ${option}`:''}`,vendor:p.vendor,amount:p.price*quantity,status:'Placed',window:data.window,created:now()});state.cart=[];save();modal=null;page='orders';render();notify('Demo order placed');return;}
-  if(form.id==='customize-form'){let p=products.find(x=>x.id===form.dataset.id&&x.type==='merch'),quantity=Number(data.quantity);if(!p||!Number.isInteger(quantity)||quantity<1||quantity>50){notify('Choose a quantity from 1 to 50.');return;}state.cart.push({id:p.id,option:`${data.color} / ${data.size}`,quantity});save();show('cart');notify('Configured item added to cart');return;}
-  if(form.id==='rent-form'){let p=products.find(x=>x.id===form.dataset.id),start=new Date(`${data.start}T00:00:00`),end=new Date(`${data.end}T00:00:00`),today=new Date();today.setHours(0,0,0,0);let days=Math.round((end-start)/86400000)+1;if(!p||p.id!=='r2'||!Number.isFinite(days)||start<today||days<1||days>30){notify('Choose a valid rental period of up to 30 days.');return;}let amount=p.price*days;if(!spend(amount,`Rental request · ${p.name}`))return;state.orders.unshift({id:uid('RNT'),type:'resale',title:`${p.name} · ${days} day${days>1?'s':''}`,vendor:p.vendor,amount,status:'Placed',created:now(),window:`${data.start} to ${data.end}`});save();modal=null;page='orders';render();notify('Demo rental request placed');return;}
-  if(form.id==='print-form'){let pages=Number(data.pages),copies=Number(data.copies),documentName=data.document?.trim();if(!documentName||!Number.isInteger(pages)||pages<1||pages>500||!Number.isInteger(copies)||copies<1||copies>20||!['bw','color'].includes(data.color)||!['none','spiral'].includes(data.binding)){notify('Check the print request details.');return;}let amount=pages*copies*(data.color==='color'?8:2)+(data.binding==='spiral'?30:0);if(!spend(amount,`Print request · ${documentName}`))return;state.orders.unshift({id:uid('PRT'),type:'xerox',title:`Print: ${documentName}`,vendor:data.shop,amount,status:'Placed',created:now(),window:'When ready'});save();modal=null;page='orders';render();notify('Demo print request created');return;}
-  if(form.id==='task-form'){let deadline=new Date(data.deadline),budget=Number(data.budget),title=data.title?.trim(),description=data.description?.trim();if(Number.isNaN(deadline.getTime())||deadline<=new Date()){notify('Choose a future deadline.');return;}if(!title||!description||!Number.isInteger(budget)||budget<1||budget>100000){notify('Enter a valid task and budget.');return;}let t={id:uid('T'),title,description,budget,deadline:deadline.toLocaleString('en-IN',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}),category:data.category,poster:'You',anonymous:data.anonymous==='anonymous',urgent:!!data.urgent,status:'Open',bids:[{id:uid('B'),worker:'Riya M. (demo)',amount:budget,note:'I can complete this by your deadline. Demo proposal.'}]};state.tasks.unshift(t);save();taskTab='mine';modal=null;page='tasks';search='';render();notify('Demo task published');return;}
-  if(form.id==='bid-form'){let t=state.tasks.find(x=>x.id===form.dataset.id),amount=Number(data.amount);if(!t||t.status!=='Open'||t.poster==='You')return;if(!Number.isInteger(amount)||amount<1||amount>100000||!data.eta?.trim()||!data.note?.trim()){notify('Enter a valid bid and proposal.');return;}let existing=t.bids.find(b=>b.worker==='You');if(existing){existing.amount=amount;existing.note=`${data.note.trim()} · ETA: ${data.eta.trim()}`;}else t.bids.push({id:uid('B'),worker:'You',amount,note:`${data.note.trim()} · ETA: ${data.eta.trim()}`});save();show('task',t.id);notify(existing?'Demo bid updated':'Demo bid submitted');return;}
-  if(form.id==='message-form'){let text=data.text?.trim();if(!text||!state.tasks.some(t=>t.id===form.dataset.id))return;state.messages.push({id:uid('M'),taskId:form.dataset.id,text,date:now(),mine:true});save();show('messages',form.dataset.id);return;}
-  if(form.id==='service-form'){let s=allServices().find(x=>x.id===form.dataset.id),when=new Date(`${data.date}T${data.time}`);if(!s||s.mine)return;if(Number.isNaN(when.getTime())||when<=new Date()||!data.note?.trim()){notify('Choose a future time and describe your request.');return;}if(!spend(s.price,`Service booking · ${s.name}`))return;state.bookings.unshift({id:uid('BK'),serviceId:s.id,amount:s.price,name:s.name,provider:s.provider,date:`${data.date} ${data.time}`,note:data.note.trim(),status:'Requested'});save();modal=null;page='services';render();notify('Demo booking request sent');return;}
-  if(form.id==='offer-service-form'){let price=Number(data.price),name=data.name?.trim(),desc=data.desc?.trim();if(!name||!desc||!Number.isInteger(price)||price<1||price>100000){notify('Enter a valid service and price.');return;}state.serviceListings.unshift({id:uid('SV'),name,provider:'You',price,unit:data.unit,icon:'✨',desc,mine:true});save();modal=null;page='services';search='';render();notify('Demo service published');return;}
-  if(form.id==='listing-form'){let name=data.name?.trim(),desc=data.desc?.trim(),price=Number(data.price);if(!name||!desc||!Number.isInteger(price)||price<1||price>100000){notify('Enter a valid listing and price.');return;}state.listings.unshift({id:uid('L'),name,price,condition:data.condition,desc,icon:'📦',mine:true});save();modal=null;page='resale';search='';render();notify('Demo listing published');return;}
+
+function runPalette(target) {
+  ui.palette = false;
+  if (target.startsWith('#')) { navigate(target); return; }
+  const action = target.replace(/^act:/, '');
+  handleAction(action, { dataset: {} });
+}
+
+function handleAction(act, el, event) {
+  const id = el.dataset.id;
+  const stop = () => { /* helper for readability */ };
+  switch (act) {
+    /* shell */
+    case 'menu': ui.menu = !ui.menu; render(); break;
+    case 'close-menu': ui.menu = false; render(); break;
+    case 'account': { const pop = $('.avatar-btn'); if (pop) pop.classList.toggle('open'); break; }
+    case 'theme': {
+      const next = state.settings.theme === 'dark' ? 'light' : 'dark';
+      updateSettings({ theme: next });
+      break;
+    }
+    case 'area': openDrawer('area'); break;
+    case 'set-area': state.area = el.dataset.area; commit(`Campus area set to ${state.area}`); ui.drawer = null; break;
+    case 'help': ui.help = true; ui.modal = null; render(); break;
+    case 'palette': ui.palette = true; ui.help = false; render(); break;
+    case 'reset': if (confirm('Reset all orders, tasks, wallet activity and listings in this browser?')) resetState(); break;
+    case 'clear-search': ui.query = ''; ui.searchOpen = false; render(); break;
+    case 'search-all': navigate(`#/search?q=${encodeURIComponent(ui.query)}`); break;
+
+    /* explore */
+    case 'cat': ui.explore.cat = el.dataset.cat; render(); break;
+    case 'view': ui.explore.view = el.dataset.view; render(); break;
+    case 'reset-filters': ui.explore = { cat: 'all', sort: 'featured', max: 1000, stock: false, minRating: 0, view: ui.explore.view }; ui.query = ''; render(); break;
+
+    /* product */
+    case 'wish': toggleWishlist(id); break;
+    case 'add': {
+      const p = getProduct(id);
+      if (!p) break;
+      if (p.rental) { openModal('rent', id); break; }
+      if ((p.options || []).length) { openModal('customize', id); break; }
+      addToCart(id, '', 1);
+      break;
+    }
+    case 'quick': addToCart(id, '', 1); break;
+    case 'add-pdp': addToCart(id, '', ui.pdpQty); break;
+    case 'buy-now': addToCart(id, '', ui.pdpQty, true); navigate('#/checkout'); break;
+    case 'pdp-qty': {
+      const p = getProduct(route.id);
+      if (!p) break;
+      ui.pdpQty = Math.max(1, Math.min(p.stock || 1, ui.pdpQty + Number(el.dataset.delta)));
+      render();
+      break;
+    }
+    case 'product-tab': ui.productTab = el.dataset.tab; render(); break;
+    case 'review': openModal('review', id); break;
+
+    /* cart and checkout */
+    case 'qty': setCartQty(Number(el.dataset.index), cartLines()[Number(el.dataset.index)].qty + Number(el.dataset.delta)); break;
+    case 'remove-cart': removeFromCart(Number(el.dataset.index)); break;
+    case 'promo': { const input = $('#promo-input'); applyPromo(input ? input.value : ''); break; }
+    case 'clear-cart': clearCart(); break;
+    case 'checkout-step': ui.checkout.step = Number(el.dataset.step); captureCheckoutFields(); render(); break;
+    case 'checkout-mode': captureCheckoutFields(); ui.checkout.mode = el.dataset.mode; render(); break;
+    case 'checkout-payment': ui.checkout.payment = el.dataset.payment; render(); break;
+    case 'place-order': {
+      const order = placeOrder(ui.checkout);
+      if (!order) break;
+      ui.checkout = { step: 1, mode: 'Pickup', slot: PICKUP_SLOTS[0], note: '', payment: 'KC balance' };
+      navigate(`#/order/${order.id}`);
+      toast(`Order ${order.id} is live — watch it move through the queue`, 'ok');
+      break;
+    }
+
+    /* orders */
+    case 'order-tab': ui.orderTab = el.dataset.tab; render(); break;
+    case 'order-status': ui.orderStatus = el.dataset.status; render(); break;
+    case 'cancel-order': cancelOrder(id); break;
+    case 'reorder': reorder(id); break;
+    case 'rate': openModal('rate', id); break;
+    case 'advance-order': advanceOrder(id); break;
+    case 'contact-vendor': { const o = getOrder(id); openModal('chat', id, { title: `Vendor · ${o ? o.vendor : 'Shop'}`, subtitle: o ? `${o.id} · ${o.status}` : '' }); break; }
+
+    /* tickets */
+    case 'checkin': toggleCheckIn(id); break;
+    case 'cancel-ticket': cancelTicket(id); break;
+    case 'event': openModal('event', id); break;
+    case 'register': registerEvent(id); break;
+    case 'event-cat': ui.eventCat = el.dataset.cat; render(); break;
+    case 'new-event': openModal('new-event'); break;
+    case 'delete-event': if (confirm('Remove this event and refund every ticket?')) deleteEvent(id); break;
+
+    /* tasks */
+    case 'post-task': openModal('post-task'); break;
+    case 'task-tab': ui.taskTab = el.dataset.tab; render(); break;
+    case 'accept-bid': acceptBid(id, el.dataset.bid); break;
+    case 'submit-work': submitWork(id); break;
+    case 'approve-task': approveTask(id); break;
+    case 'cancel-task': if (confirm('Cancel this task and release any escrow?')) cancelTask(id); break;
+    case 'withdraw-bid': withdrawBid(id); break;
+
+    /* services */
+    case 'service': openModal('service', id); break;
+    case 'service-tab': ui.serviceTab = el.dataset.tab; render(); break;
+    case 'offer-service': openModal('offer-service'); break;
+    case 'remove-service': removeService(id); break;
+    case 'complete-service': completeMyService(id); break;
+    case 'cancel-booking': cancelBooking(id); break;
+    case 'rate-booking': openModal('rate-booking', id); break;
+
+    /* resale */
+    case 'new-listing': openModal('new-listing'); break;
+    case 'edit-listing': openModal('edit-listing', id); break;
+    case 'delist': if (confirm('Delete this listing?')) removeListing(id); break;
+    case 'sold': { const l = getListing(id); if (l) updateListing(id, { status: l.status === 'sold' ? 'live' : 'sold' }); break; }
+    case 'buy-listing': if (confirm('Buy this item now? KC moves from your wallet.')) buyListing(id); break;
+    case 'message-seller': openModal('seller', id); break;
+    case 'resale-tab': ui.resaleTab = el.dataset.tab; render(); break;
+
+    /* wallet */
+    case 'add-funds': openModal('add-funds'); break;
+    case 'send': openModal('send'); break;
+    case 'request': openModal('request'); break;
+    case 'settle-request': settleRequest(id); break;
+    case 'wallet-cat': ui.walletCat = el.dataset.cat; render(); break;
+
+    /* notifications */
+    case 'open-notif': {
+      const note = state.notifications.find(n => n.id === id);
+      if (note) { note.read = true; save(); ui.drawer = null; if (note.link) navigate(note.link); else render(); }
+      break;
+    }
+    case 'read-all': state.notifications.forEach(n => { n.read = true; }); commit('All notifications marked read'); break;
+    case 'clear-notifs': state.notifications = []; commit('Notifications cleared'); break;
+    case 'notif-tab': ui.notifTab = el.dataset.tab; render(); break;
+
+    /* profile and console */
+    case 'role': setRole(el.dataset.role); break;
+    case 'export': exportBackup(); break;
+    case 'quick-amount': { const box = document.querySelector('#add-funds-form input[name="amount"]'); if (box) box.value = el.dataset.amount; break; }
+    case 'import': { const input = $('#import-file'); if (input) input.click(); break; }
+    case 'moderate': moderateReport(id, el.dataset.decision); break;
+    case 'toggle-user': toggleUser(id); break;
+    case 'toggle-stock': toggleStock(id); break;
+    case 'delete-product': if (confirm('Remove this item from the menu?')) deleteProduct(id); break;
+
+    default: stop();
+  }
+}
+
+function captureCheckoutFields() {
+  const slot = document.querySelector('.checkout-main select[name="slot"]');
+  const note = document.querySelector('.checkout-main input[name="note"]');
+  if (slot) ui.checkout.slot = slot.value;
+  if (note) ui.checkout.note = note.value;
+}
+
+function exportBackup() {
+  try {
+    const blob = new Blob([exportData()], { type: 'application/json' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `kart-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    toast('Backup downloaded', 'ok');
+  } catch { toast('Export is not available in this browser.', 'warn'); }
+}
+
+/* ---------- change / input ---------- */
+
+document.addEventListener('input', event => {
+  const target = event.target;
+  if (target.id === 'global-search') {
+    ui.query = target.value;
+    ui.focusSearch = true;
+    ui.caret = target.selectionStart ?? target.value.length;
+    ui.searchOpen = true;
+    if (!['explore', 'search'].includes(route.name)) { navigate(`#/search?q=${encodeURIComponent(ui.query)}`); return; }
+    render();
+    return;
+  }
+  if (target.id === 'palette-input') { filterPalette(target.value); return; }
+  if (target.dataset.act === 'max') {
+    ui.explore.max = Number(target.value);
+    const label = target.parentElement.querySelector('span');
+    if (label) label.textContent = `Up to ${kc(ui.explore.max)}`;
+    clearTimeout(ui.maxTimer);
+    ui.maxTimer = setTimeout(render, 90);
+    return;
+  }
+  if (target.closest && target.closest('#print-form')) updatePrintEstimate(target.form);
+  if (target.closest && target.closest('#customize-form')) updateCustomizeEstimate(target.form);
+  if (target.closest && target.closest('#rent-form')) updateRentEstimate(target.form);
+  if (target.id === 'promo-input') ui.promoDraft = target.value;
 });
+
+document.addEventListener('change', event => {
+  const target = event.target;
+  if (target.id === 'role-select') { setRole(target.value); navigate('#/workspace'); return; }
+  if (target.dataset.act === 'sort') { ui.explore.sort = target.value; render(); return; }
+  if (target.dataset.act === 'instock') { ui.explore.stock = target.checked; render(); return; }
+  if (target.dataset.act === 'rated') { ui.explore.minRating = target.checked ? 4 : 0; render(); return; }
+  if (target.dataset.act === 'checkin') { toggleCheckIn(target.dataset.id); return; }
+  if (target.id === 'import-file' && target.files && target.files[0]) {
+    const reader = new FileReader();
+    reader.onload = () => importData(String(reader.result));
+    reader.readAsText(target.files[0]);
+    return;
+  }
+  if (target.closest && target.closest('#print-form')) updatePrintEstimate(target.form);
+  if (target.closest && target.closest('#rent-form')) updateRentEstimate(target.form);
+});
+
+function filterPalette(query) {
+  const q = query.trim().toLowerCase();
+  const items = $$('.palette-item');
+  let visible = 0;
+  items.forEach(item => {
+    const match = item.textContent.toLowerCase().includes(q);
+    item.hidden = !match;
+    if (match) visible += 1;
+  });
+  const empty = $('.palette-empty');
+  if (empty) empty.hidden = visible > 0;
+}
+
+function updatePrintEstimate(form) {
+  const box = $('#print-estimate');
+  if (!form || !box) return;
+  const pages = Number(form.pages.value) || 0;
+  const copies = Number(form.copies.value) || 1;
+  const perPage = form.colour.value === 'colour' ? 8 : 2;
+  const total = pages * copies * perPage + (form.binding.value === 'spiral' ? 30 : 0);
+  box.textContent = kc(total);
+}
+
+function updateCustomizeEstimate(form) {
+  const box = $('#customize-estimate');
+  const p = getProduct(form?.dataset.id);
+  if (!box || !p) return;
+  const qty = Math.max(1, Math.min(50, Number(form.qty.value) || 1));
+  box.textContent = `${kc(p.price * qty)} · ${qty} × ${kc(p.price)}`;
+}
+
+function updateRentEstimate(form) {
+  const box = $('#rent-estimate');
+  const p = getProduct(form?.dataset.id);
+  if (!box || !p) return;
+  if (!form.start.value || !form.end.value) { box.textContent = 'Pick dates to calculate'; return; }
+  const days = Math.round((new Date(form.end.value) - new Date(form.start.value)) / DAY) + 1;
+  box.textContent = days < 1 ? 'End date must follow the start date' : `${kc(p.price * days)} · ${days} day${days > 1 ? 's' : ''}`;
+}
+
+/* ---------- forms ---------- */
+
+document.addEventListener('submit', event => {
+  const form = event.target;
+  if (!form.id) return;
+  event.preventDefault();
+  const data = Object.fromEntries(new FormData(form));
+  const id = form.dataset.id;
+
+  switch (form.id) {
+    case 'checkout-review': break;
+
+    case 'customize-form': {
+      const p = getProduct(id);
+      const qty = Number(data.qty);
+      if (!p || !Number.isInteger(qty) || qty < 1 || qty > 50) { toast('Choose a quantity from 1 to 50.', 'warn'); return; }
+      const variant = (p.options || []).map(o => data[`opt_${o.name}`]).filter(Boolean).join(' / ');
+      if (!addToCart(p.id, variant, qty)) return;
+      ui.modal = null;
+      openDrawer('cart');
+      break;
+    }
+
+    case 'rent-form': {
+      const p = getProduct(id);
+      const start = new Date(data.start);
+      const end = new Date(data.end);
+      const days = Math.round((end - start) / DAY) + 1;
+      if (!p || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start < new Date(new Date().toDateString()) || days < 1 || days > 30) {
+        toast('Choose a valid rental window of up to 30 days.', 'warn');
+        return;
+      }
+      if (!spend(p.price * days, `Rental · ${p.name}`, 'Resale')) return;
+      state.orders.unshift({
+        id: makeId('RNT'), type: 'resale', vendor: p.vendor, created: isoNow(), status: 'Placed', auto: false,
+        payment: 'KC balance', fulfil: { mode: 'Meet-up', slot: `${data.start} → ${data.end}`, note: '' },
+        items: [{ id: p.id, name: `${p.name} rental`, icon: p.icon, price: p.price, qty: days, variant: `${days} day${days > 1 ? 's' : ''}`, vendor: p.vendor, type: 'resale' }],
+        subtotal: p.price * days, discount: 0, fee: 0, total: p.price * days, rating: 0,
+        timeline: [{ status: 'Placed', at: isoNow() }]
+      });
+      notify('resale', 'Rental requested', `${p.name} for ${days} day${days > 1 ? 's' : ''}.`);
+      ui.modal = null;
+      navigate('#/orders');
+      toast('Rental request placed', 'ok');
+      break;
+    }
+
+    case 'print-form': {
+      const pages = Number(data.pages);
+      const copies = Number(data.copies);
+      const name = String(data.document || '').trim();
+      if (!name || !Number.isInteger(pages) || pages < 1 || pages > 500 || !Number.isInteger(copies) || copies < 1 || copies > 20) {
+        toast('Check the document name, pages and copies.', 'warn');
+        return;
+      }
+      const amount = pages * copies * (data.colour === 'colour' ? 8 : 2) + (data.binding === 'spiral' ? 30 : 0);
+      if (!spend(amount, `Print · ${name}`, 'Orders')) return;
+      state.orders.unshift({
+        id: makeId('PRT'), type: 'xerox', vendor: data.shop, created: isoNow(), status: 'Placed', auto: true,
+        payment: 'KC balance', fulfil: { mode: 'Pickup', slot: 'When ready', note: `${data.sides === 'duplex' ? 'Double-sided' : 'Single-sided'} · ${copies} cop${copies > 1 ? 'ies' : 'y'}` },
+        items: [{ id: '', name: `Print: ${name}`, icon: '🖨️', price: amount, qty: 1, variant: `${pages} pages × ${copies}`, vendor: data.shop, type: 'xerox' }],
+        subtotal: amount, discount: 0, fee: 0, total: amount, rating: 0,
+        timeline: [{ status: 'Placed', at: isoNow() }]
+      });
+      notify('xerox', 'Print request created', `${name} · ${kc(amount)} at ${data.shop}`);
+      audit(`Print request created for ${kc(amount)}`);
+      ui.modal = null;
+      navigate('#/orders');
+      scheduleOrderProgress(state.orders[0].id);
+      toast('Print request is in the queue', 'ok');
+      break;
+    }
+
+    case 'task-form': {
+      const task = postTask(data);
+      if (!task) return;
+      ui.modal = null;
+      ui.taskTab = 'mine';
+      navigate('#/task/' + task.id);
+      break;
+    }
+
+    case 'bid-form': {
+      const amount = Number(data.amount);
+      const eta = String(data.eta || '').trim();
+      const note = String(data.note || '').trim();
+      if (!Number.isInteger(amount) || amount < 1 || amount > 100000 || !eta || !note) { toast('Enter a valid bid and proposal.', 'warn'); return; }
+      placeBid(id, amount, eta, note);
+      break;
+    }
+
+    case 'message-form': {
+      const text = String(data.text || '').trim();
+      if (!text) return;
+      sendMessage(id, text);
+      break;
+    }
+
+    case 'seller-form': {
+      const text = String(data.text || '').trim();
+      if (!text) return;
+      const log = $('#seller-chat');
+      if (log) {
+        log.insertAdjacentHTML('beforeend', `<div class="message mine"><span>${esc(text)}</span><small>You · ${timeOnly(isoNow())}</small></div>`);
+        log.scrollTop = log.scrollHeight;
+        form.reset();
+        setTimeout(() => {
+          const reply = document.querySelector('#seller-chat');
+          if (!reply) return;
+          reply.insertAdjacentHTML('beforeend', `<div class="message"><span>Sure — I can meet near the main gate after 5 today. Price is slightly negotiable if you bring cash KC.</span><small>Seller · ${timeOnly(isoNow())}</small></div>`);
+          reply.scrollTop = reply.scrollHeight;
+        }, 1400);
+      }
+      break;
+    }
+
+    case 'chat-form': {
+      const text = String(data.text || '').trim();
+      if (!text) return;
+      ui.thread.push({ mine: true, text, at: isoNow() });
+      render();
+      setTimeout(() => {
+        ui.thread.push({ mine: false, text: 'Thanks for writing — your order is on track. Show the order number at the counter and we will hand it over.', at: isoNow() });
+        if (ui.modal && ui.modal.kind === 'chat') render();
+      }, 1400);
+      break;
+    }
+
+    case 'service-form': {
+      if (!bookService(id, data)) return;
+      ui.modal = null;
+      ui.serviceTab = 'bookings';
+      navigate('#/services');
+      break;
+    }
+
+    case 'offer-service-form': if (!offerService(data)) return; ui.modal = null; ui.serviceTab = 'offers'; navigate('#/services'); break;
+    case 'listing-form': {
+      const ok = id ? updateListing(id, { name: data.name, price: Number(data.price), condition: data.condition, desc: data.desc, icon: data.icon }) : createListing(data);
+      if (!ok) return;
+      ui.modal = null;
+      ui.resaleTab = 'mine';
+      navigate('#/resale');
+      break;
+    }
+    case 'new-event-form': {
+      const event = saveEvent(data);
+      if (!event) return;
+      ui.modal = null;
+      state.role = 'Organizer';
+      navigate('#/workspace');
+      break;
+    }
+    case 'event-form': {
+      const created = saveEvent(data);
+      if (!created) return;
+      form.reset();
+      break;
+    }
+    case 'product-form': {
+      if (!addProduct(data)) return;
+      form.reset();
+      break;
+    }
+    case 'send-form': if (!sendKC(data.amount, data.to, data.note)) return; ui.modal = null; navigate('#/wallet'); break;
+    case 'request-form': if (!requestKC(data.amount, data.from, data.note)) return; ui.modal = null; navigate('#/wallet'); break;
+    case 'add-funds-form': if (!addFunds(data.amount)) return; ui.modal = null; navigate('#/wallet'); break;
+
+    case 'rate-form': {
+      const rating = Number(data['order-rating'] || data.rating || 5);
+      if (!rateOrder(id, rating, String(data.text || '').trim())) return;
+      ui.modal = null;
+      break;
+    }
+    case 'rate-booking-form': {
+      const rating = Number(data['booking-rating'] || 5);
+      if (!rateBooking(id, rating)) return;
+      ui.modal = null;
+      break;
+    }
+    case 'review-form': {
+      const p = getProduct(id);
+      const rating = Number(data['review-rating'] || 5);
+      const text = String(data.text || '').trim();
+      if (!p || !text) { toast('Write a few words about your experience.', 'warn'); return; }
+      const list = (state.reviews[p.id] ||= []);
+      const mine = list.find(r => r.user === state.profile.name);
+      if (mine) { mine.rating = rating; mine.text = text; mine.at = isoNow(); }
+      else list.unshift({ id: makeId('RV'), user: state.profile.name, rating, text, at: isoNow() });
+      ui.modal = null;
+      commit('Review published');
+      break;
+    }
+
+    case 'profile-form': {
+      if (!String(data.name || '').trim() || !String(data.email || '').trim()) { toast('Name and email are required.', 'warn'); return; }
+      updateProfile({ name: String(data.name).trim(), email: String(data.email).trim(), hostel: String(data.hostel || '').trim(), bio: String(data.bio || '').trim() });
+      state.area = data.area || state.area;
+      save();
+      break;
+    }
+    case 'settings-form': {
+      updateSettings({ theme: data.theme, notify: !!data.notify });
+      ui.explore.view = data.view || ui.explore.view;
+      break;
+    }
+
+    default: break;
+  }
+});
+
+/* ---------- keyboard ---------- */
+
+let gPressed = false;
+document.addEventListener('keydown', event => {
+  const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName);
+
+  if (event.key === 'Escape') {
+    if (ui.modal) { closeModal(); return; }
+    if (ui.palette) { ui.palette = false; render(); return; }
+    if (ui.help) { ui.help = false; render(); return; }
+    if (ui.drawer) { ui.drawer = null; render(); return; }
+    if (ui.menu) { ui.menu = false; render(); return; }
+  }
+
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault();
+    ui.palette = !ui.palette;
+    ui.modal = null;
+    render();
+    return;
+  }
+
+  if (typing) {
+    if (event.key === 'Enter' && ui.palette && event.target.id === 'palette-input') {
+      const first = $$('.palette-item').find(item => !item.hidden);
+      if (first) { event.preventDefault(); runPalette(first.dataset.target); }
+    }
+    if (event.key === 'Enter' && event.target.id === 'global-search') {
+      event.preventDefault();
+      navigate(`#/search?q=${encodeURIComponent(ui.query)}`);
+    }
+    return;
+  }
+
+  if (event.key === '/') { event.preventDefault(); ui.searchOpen = true; const input = $('#global-search'); if (input) input.focus(); return; }
+  if (event.key === '?') { event.preventDefault(); ui.help = !ui.help; render(); return; }
+  if (event.key.toLowerCase() === 'c') { openDrawer('cart'); return; }
+
+  if (gPressed) {
+    const map = { h: '#/home', e: '#/explore', o: '#/orders', w: '#/wallet', t: '#/tasks', p: '#/profile' };
+    const target = map[event.key.toLowerCase()];
+    gPressed = false;
+    if (target) { event.preventDefault(); navigate(target); }
+    return;
+  }
+  if (event.key.toLowerCase() === 'g') { gPressed = true; setTimeout(() => { gPressed = false; }, 1200); return; }
+
+  if (event.key === 'Enter' && event.target.matches?.('[data-go]')) {
+    event.preventDefault();
+    navigate(event.target.dataset.go);
+  }
+});
+
+/* ---------- boot ---------- */
+
+if (typeof window !== 'undefined' && window.addEventListener) {
+  window.addEventListener('hashchange', () => { applyRoute(); ui.drawer = null; render(); });
+}
+
+applyRoute();
+applyTheme(state.settings.theme);
 render();
+
+state.orders.filter(o => o.auto && !['Picked up', 'Cancelled'].includes(o.status)).forEach(o => scheduleOrderProgress(o.id));
