@@ -1,0 +1,33 @@
+name: web
+
+on:
+  push:
+    branches: [main]
+    paths: ['web/**', '.github/workflows/web.yml']
+  pull_request:
+    paths: ['web/**', '.github/workflows/web.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - name: Browser end-to-end
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: |
+          npx next start -p 3100 &
+          npx --yes wait-on http://localhost:3100/login
+          npm run test:e2e

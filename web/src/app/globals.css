@@ -1,0 +1,19 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: var(--font-dm-sans), system-ui, sans-serif;
+  --font-display: var(--font-outfit), system-ui, sans-serif;
+  --color-ink: #1b3029;
+  --color-canvas: #f5f7f2;
+  --color-forest-950: #102c24;
+  --color-forest-800: #204a39;
+  --color-forest-700: #285143;
+  --color-forest-100: #eaf4ec;
+  --color-amber-kart: #f4a84c;
+  --color-line: #e6ece5;
+  --color-muted: #728579;
+}
+
+body { background: var(--color-canvas); color: var(--color-ink); }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--color-amber-kart); outline-offset: 2px; }

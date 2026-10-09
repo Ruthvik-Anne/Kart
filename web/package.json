@@ -1,0 +1,30 @@
+{
+  "name": "kart-web",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "node e2e/e2e.mjs && node e2e/features.mjs",
+    "test:all": "npm run lint && npm test",
+    "test:e2e:features": "node e2e/features.mjs"
+  },
+  "dependencies": {
+    "next": "^16.4.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "puppeteer-core": "^25.13.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.3"
+  }
+}

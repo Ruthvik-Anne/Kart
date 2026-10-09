@@ -29,3 +29,7 @@ Production work needs a server-side identity and permissions system, transaction
 - `index.html` — application shell
 - `styles.css` — responsive visual system
 - `app.js` — sample data, state, rendering, and browser-local interactions
+
+## KART web (role-based Next.js app)
+
+A fuller, role-based front-end lives in [`web/`](web/README.md): separate experiences for students, providers, vendors (by store type), campus admins and platform admins, a ranked task board with private task chat, a double-entry KC ledger with escrow, and a simulated audit chain. The vanilla prototype above remains for reference.
