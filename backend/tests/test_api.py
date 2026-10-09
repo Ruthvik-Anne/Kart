@@ -56,9 +56,10 @@ class ApiIntegrationTests(unittest.TestCase):
                     self.assertEqual(client.post(f"/v1/orders/{order['id']}/advance", headers=auth(vendor), json={}).status_code, 200)
                 credential = client.get(f"/v1/tasks/{task_id}/pickup", headers=auth(worker)).json()
                 self.assertEqual(credential["pickup_code"], order["pickup_code"])
+                self.assertEqual(client.post(f"/v1/tasks/{task_id}/actions/start", headers=auth(worker)).status_code, 200)
                 self.assertEqual(client.post(f"/v1/orders/{order['id']}/advance", headers=auth(vendor),
                                              json={"code": credential["pickup_code"]}).status_code, 200)
-                for person, action in [(worker, "start"), (worker, "submit"), (buyer, "approve")]:
+                for person, action in [(worker, "submit"), (buyer, "approve")]:
                     response = client.post(f"/v1/tasks/{task_id}/actions/{action}", headers=auth(person))
                     self.assertEqual(response.status_code, 200, response.text)
                 self.assertEqual(client.get("/v1/wallet", headers=auth(worker)).json()["available"], 20)
