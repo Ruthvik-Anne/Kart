@@ -33,3 +33,7 @@ Production work needs a server-side identity and permissions system, transaction
 ## KART web (role-based Next.js app)
 
 A fuller, role-based front-end lives in [`web/`](web/README.md): separate experiences for students, providers, vendors (by store type), campus admins and platform admins, a ranked task board with private task chat, a double-entry KC ledger with escrow, and a simulated audit chain. The vanilla prototype above remains for reference.
+
+## Backend foundation
+
+A persistent FastAPI implementation for campus-scoped tasks, bidding, private messages, and simulated KC reservations is under [`backend/`](backend/README.md). The Next.js frontend remains a separate browser mock until each API is connected. No real-money wallet or settlement is enabled.
