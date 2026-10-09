@@ -71,7 +71,7 @@ export default function LiveWorkspace() {
   const [messages, setMessages] = useState<Chat[]>([]);
   const [bidderThread, setBidderThread] = useState('');
 
-  const refresh = useCallback(async (token: string) => {
+  const refresh = useCallback(async (token?: string) => {
     const [t, s, p, o, pj, l, rentalsData, sv, b, e, tk, org, w] = await Promise.all([
       backend<Task[]>('v1/tasks', token), backend<Store[]>('v1/stores', token),
       backend<Product[]>('v1/catalog', token), backend<Order[]>('v1/orders', token),
