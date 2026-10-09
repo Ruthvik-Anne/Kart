@@ -10,16 +10,17 @@ type Chat = { id: string; sender_id: string; body: string; created_at: number };
 type Store = { id: string; name: string; type: string };
 type Product = { id: string; store_id: string; store_name: string; name: string; price: number; stock: number };
 type Order = { id: string; store_id: string; amount: number; status: string; pickup_code?: string; items: { name: string; quantity: number }[] };
+type PrintJob = { id: string; store_id: string; file_name: string; pages: number; copies: number; amount: number; status: string; pickup_code?: string };
 type Listing = { id: string; title: string; amount: number; status: string; seller_id: string; buyer_id?: string };
 type Service = { id: string; title: string; amount: number; provider_id: string };
 type Booking = { id: string; service_id: string; status: string; provider_id: string; buyer_id: string };
 type Event = { id: string; title: string; price: number; capacity: number; reserved_seats: number; starts_at: number };
 type Ticket = { id: string; event_id: string; title: string; status: string; code: string };
 type Org = { id: string; name: string; type: string; store_id?: string; store_type?: string };
-type Tab = 'tasks' | 'shops' | 'market' | 'services' | 'events' | 'wallet';
+type Tab = 'tasks' | 'shops' | 'print' | 'market' | 'services' | 'events' | 'wallet';
 
 const sections: { id: Tab; label: string }[] = [
-  { id: 'tasks', label: 'Tasks' }, { id: 'shops', label: 'Campus shops' },
+  { id: 'tasks', label: 'Tasks' }, { id: 'shops', label: 'Campus shops' }, { id: 'print', label: 'Xerox' },
   { id: 'market', label: 'Student market' }, { id: 'services', label: 'Services' },
   { id: 'events', label: 'Events' }, { id: 'wallet', label: 'KC & orders' },
 ];
@@ -52,6 +53,7 @@ export default function LiveWorkspace() {
   const [stores, setStores] = useState<Store[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [printJobs, setPrintJobs] = useState<PrintJob[]>([]);
   const [listings, setListings] = useState<Listing[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -66,15 +68,16 @@ export default function LiveWorkspace() {
   const [bidderThread, setBidderThread] = useState('');
 
   const refresh = useCallback(async (token: string) => {
-    const [t, s, p, o, l, sv, b, e, tk, org, w] = await Promise.all([
+    const [t, s, p, o, pj, l, sv, b, e, tk, org, w] = await Promise.all([
       backend<Task[]>('v1/tasks', token), backend<Store[]>('v1/stores', token),
       backend<Product[]>('v1/catalog', token), backend<Order[]>('v1/orders', token),
+      backend<PrintJob[]>('v1/print-jobs', token),
       backend<Listing[]>('v1/listings', token), backend<Service[]>('v1/services', token),
       backend<Booking[]>('v1/bookings', token), backend<Event[]>('v1/events', token),
       backend<Ticket[]>('v1/tickets', token), backend<Org[]>('v1/organizations/mine', token),
       backend<{ available: number; reserved: number }>('v1/wallet', token),
     ]);
-    setTasks(t); setStores(s); setProducts(p); setOrders(o); setListings(l);
+    setTasks(t); setStores(s); setProducts(p); setOrders(o); setPrintJobs(pj); setListings(l);
     setServices(sv); setBookings(b); setEvents(e); setTickets(tk); setOrgs(org); setBalance(w);
   }, []);
 
@@ -159,6 +162,13 @@ export default function LiveWorkspace() {
   const current = tasks.find(task => task.id === selectedTask);
   const myStores = orgs.filter(org => org.store_id);
   const clubs = orgs.filter(org => org.type === 'club');
+  const downloadPrint = async (job: PrintJob) => {
+    const response = await fetch(`/api/backend/v1/print-jobs/${job.id}/file`, { headers: { Authorization: `Bearer ${session.token}` } });
+    if (!response.ok) { setNotice('Could not open this document'); return; }
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement('a'); link.href = url; link.download = job.file_name; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  };
   return <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
     <header className="flex flex-wrap items-center justify-between gap-4">
       <div><a href="/login" className="text-xs text-forest-700">← Prototype</a>
@@ -178,7 +188,8 @@ export default function LiveWorkspace() {
           title: field(form, 'title'), description: field(form, 'description'), category: field(form, 'category'),
           budget: numeric(form, 'budget'), deadline: dateSeconds(form, 'deadline'),
           anonymous: new FormData(form).has('anonymous'), urgency: field(form, 'urgency'), pricing: field(form, 'pricing'),
-          order_id: field(form, 'order') || null,
+          order_id: field(form, 'source').startsWith('order:') ? field(form, 'source').slice(6) : null,
+          print_job_id: field(form, 'source').startsWith('print:') ? field(form, 'source').slice(6) : null,
         }), 'Task published')}>
           <input className={inputClass} name="title" placeholder="What needs doing?" required minLength={3} />
           <textarea className={inputClass} name="description" placeholder="Scope and handover details" required minLength={3} />
@@ -187,8 +198,10 @@ export default function LiveWorkspace() {
           <label className="text-xs">Deadline<input className={inputClass} name="deadline" type="datetime-local" required /></label>
           <div className="grid grid-cols-2 gap-2"><select className={inputClass} name="urgency"><option value="urgent">Urgent</option><option value="scheduled">Scheduled</option><option value="long_term">Long term</option></select>
             <select className={inputClass} name="pricing"><option value="bidding">Bidding</option><option value="fixed">Fixed reward</option></select></div>
-          <select className={inputClass} name="order" defaultValue=""><option value="">Independent task</option>
-            {orders.filter(o => o.status !== 'cancelled').map(o => <option value={o.id} key={o.id}>Pickup · {o.items.map(i => i.name).join(', ')} · {o.status}</option>)}</select>
+          <select className={inputClass} name="source" defaultValue=""><option value="">Independent task</option>
+            {orders.filter(o => o.status !== 'cancelled').map(o => <option value={`order:${o.id}`} key={o.id}>Pickup · {o.items.map(i => i.name).join(', ')} · {o.status}</option>)}
+            {printJobs.filter(j => j.status !== 'cancelled').map(j => <option value={`print:${j.id}`} key={j.id}>Collect print · {j.file_name} · {j.status}</option>)}
+          </select>
           <label className="text-xs"><input type="checkbox" name="anonymous" /> Post anonymously</label><FormButton>Publish task</FormButton>
         </form></Card>
         <Card title="Campus task board"><div className="grid gap-2">{tasks.map(task =>
@@ -232,6 +245,43 @@ export default function LiveWorkspace() {
             <input className={inputClass} name="body" required placeholder="Message this participant" /><FormButton>Send</FormButton>
           </form></div>}
       </Card> : <Card title="Task details"><p className="text-sm text-muted">Choose a task to see its workflow.</p></Card>}</div>
+    </div>}
+
+    {tab === 'print' && <div className="grid gap-5 lg:grid-cols-[1fr_1.4fr]">
+      <Card title="Submit a private PDF"><form className="grid gap-3" onSubmit={async event => {
+        event.preventDefault(); const form = event.currentTarget;
+        const file = (form.elements.namedItem('pdf') as HTMLInputElement).files?.[0];
+        if (!file || file.size > 5_000_000) { setNotice('Choose a PDF under 5 MB'); return; }
+        const encoded = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(',')[1]);
+          reader.onerror = () => reject(new Error('Could not read PDF')); reader.readAsDataURL(file);
+        });
+        const result = await run('v1/print-jobs', { store_id: field(form, 'store'), file_name: file.name,
+          pdf_base64: encoded, pages: numeric(form, 'pages'), copies: numeric(form, 'copies'),
+          color: new FormData(form).has('color'), duplex: new FormData(form).has('duplex'), spiral: new FormData(form).has('spiral'),
+        }, 'Print job queued');
+        if (result) form.reset();
+      }}>
+        <select className={inputClass} name="store" required><option value="">Choose Xerox shop</option>
+          {stores.filter(store => store.type === 'xerox').map(store => <option key={store.id} value={store.id}>{store.name}</option>)}</select>
+        <input className={inputClass} name="pdf" type="file" accept="application/pdf,.pdf" required />
+        <div className="grid grid-cols-2 gap-2"><label className="text-xs">Pages<input className={inputClass} name="pages" type="number" min="1" max="500" required /></label>
+          <label className="text-xs">Copies<input className={inputClass} name="copies" type="number" min="1" max="20" defaultValue="1" required /></label></div>
+        <div className="flex gap-4 text-xs"><label><input type="checkbox" name="color" /> Colour</label>
+          <label><input type="checkbox" name="duplex" /> Duplex</label><label><input type="checkbox" name="spiral" /> Spiral binding</label></div>
+        <p className="text-xs text-muted">The PDF is stored privately by the backend and available only to you and the chosen shop.</p>
+        <FormButton>Submit print job</FormButton>
+      </form></Card>
+      <div className="grid content-start gap-5"><Card title="Your print jobs"><div className="grid gap-2">{printJobs.map(job =>
+        <div key={job.id} className="rounded-xl border border-line p-3 text-sm"><strong>{job.file_name}</strong>
+          <p className="text-xs text-muted">{job.pages} pages × {job.copies} · {job.amount} KC · {job.status}</p>
+          <div className="mt-2 flex gap-2"><Button onClick={() => void downloadPrint(job)}>Download PDF</Button>
+            {job.status === 'placed' && <Button onClick={() => void run(`v1/print-jobs/${job.id}/cancel`, {}, 'Print job refunded')}>Cancel</Button>}</div>
+          {job.status === 'ready' && <p className="mt-2 break-all text-xs">Pickup code: {job.pickup_code}</p>}
+        </div>)}{!printJobs.length && <p className="text-sm text-muted">No print jobs yet.</p>}</div></Card>
+        {myStores.filter(org => org.store_type === 'xerox').map(org => <Card key={org.id} title={`${org.name} print queue`}>
+          <PrintQueue storeId={org.store_id!} token={session.token} run={run} /></Card>)}
+      </div>
     </div>}
 
     {tab === 'shops' && <div className="grid gap-5 lg:grid-cols-2">
@@ -392,4 +442,20 @@ function ShopOrders({ storeId, token, run }: {
       <FormButton>{order.status === 'ready' ? 'Confirm pickup' : 'Advance order'}</FormButton></form>}
   </div>)}{!orders.length && <p className="text-xs text-muted">No orders. Refresh this page after a purchase.</p>}
   <button className="text-left text-xs underline" onClick={load}>Refresh queue</button></div>;
+}
+
+function PrintQueue({ storeId, token, run }: {
+  storeId: string; token: string; run: (path: string, input: unknown, success?: string) => Promise<unknown>;
+}) {
+  const [jobs, setJobs] = useState<PrintJob[]>([]);
+  const load = useCallback(() => { void backend<PrintJob[]>(`v1/print-jobs?store_id=${storeId}`, token).then(setJobs).catch(() => setJobs([])); }, [storeId, token]);
+  useEffect(() => { load(); }, [load]);
+  return <div className="grid gap-2">{jobs.map(job => <div key={job.id} className="rounded-lg bg-forest-100 p-3 text-sm">
+    <strong>{job.file_name}</strong> · {job.status}
+    {['placed', 'preparing', 'ready'].includes(job.status) && <form className="mt-2 flex gap-2" onSubmit={event => {
+      event.preventDefault(); const form = event.currentTarget;
+      void run(`v1/print-jobs/${job.id}/advance`, { code: job.status === 'ready' ? field(form, 'code') : null }, 'Print job updated').then(load);
+    }}>{job.status === 'ready' && <input className={inputClass} name="code" placeholder="Pickup code" required />}
+      <FormButton>{job.status === 'ready' ? 'Confirm collection' : 'Advance job'}</FormButton></form>}
+  </div>)}<button className="text-left text-xs underline" onClick={load}>Refresh print queue</button></div>;
 }

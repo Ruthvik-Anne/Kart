@@ -1,4 +1,5 @@
 import importlib.util
+import base64
 import os
 import tempfile
 import time
@@ -11,13 +12,14 @@ class ApiIntegrationTests(unittest.TestCase):
     def test_full_http_purchase_task_and_ticket_flow(self):
         from fastapi.testclient import TestClient
         from app.database import Database
-        from app.market import MarketService
+        from app.print_jobs import PrintService
         from app import main
 
         with tempfile.TemporaryDirectory() as directory:
             os.environ["KART_SESSION_SECRET"] = "integration-test-secret-at-least-32-characters"
             os.environ["KART_DEMO_MODE"] = "1"
-            main.service = MarketService(Database(directory + "/kart.db"))
+            os.environ["KART_UPLOAD_DIR"] = directory + "/uploads"
+            main.service = PrintService(Database(directory + "/kart.db"))
             with TestClient(main.app) as client:
                 def user(name):
                     r = client.post("/dev/users", json={"name": name, "campus_id": "campus-one"})
@@ -73,3 +75,14 @@ class ApiIntegrationTests(unittest.TestCase):
                 ticket = ticket.json()
                 self.assertEqual(client.post(f"/v1/tickets/{ticket['id']}/check-in", headers=auth(vendor),
                                              json={"code": ticket["code"]}).status_code, 200)
+                xerox = client.post("/dev/organizations", headers=auth(vendor),
+                                    json={"name": "Print counter", "type": "vendor", "store_type": "xerox"}).json()
+                print_job = client.post("/v1/print-jobs", headers=auth(buyer), json={
+                    "store_id": xerox["store_id"], "file_name": "example.pdf",
+                    "pdf_base64": base64.b64encode(b"%PDF-1.4\nexample\n%%EOF").decode(),
+                    "pages": 1, "copies": 1, "color": False, "duplex": False, "spiral": False,
+                })
+                self.assertEqual(print_job.status_code, 201, print_job.text)
+                print_id = print_job.json()["id"]
+                self.assertEqual(client.get(f"/v1/print-jobs/{print_id}/file", headers=auth(buyer)).content[:5], b"%PDF-")
+                self.assertEqual(client.get(f"/v1/print-jobs/{print_id}/file", headers=auth(worker)).status_code, 403)

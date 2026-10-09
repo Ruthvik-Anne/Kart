@@ -4,10 +4,12 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from .database import Database
 from .market import MarketService
+from .print_jobs import PrintService
 from .security import secret, sign, verify
 from .service import DomainError
 
@@ -17,7 +19,7 @@ origins = [value.strip() for value in os.getenv("KART_CORS_ORIGINS", "").split("
 if origins:
     app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=False,
                        allow_methods=["GET", "POST"], allow_headers=["Authorization", "Content-Type"])
-service = MarketService(Database())
+service = PrintService(Database())
 
 
 class TaskIn(BaseModel):
@@ -30,6 +32,7 @@ class TaskIn(BaseModel):
     budget: int = Field(gt=0, le=1_000_000)
     deadline: int
     order_id: str | None = None
+    print_job_id: str | None = None
 
 
 class BidIn(BaseModel):
@@ -112,6 +115,17 @@ class CodeIn(BaseModel):
 
 class BookingDecision(BaseModel):
     release_to_provider: bool
+
+
+class PrintIn(BaseModel):
+    store_id: str
+    file_name: str = Field(min_length=5, max_length=120)
+    pdf_base64: str = Field(min_length=8, max_length=7_000_000)
+    pages: int = Field(ge=1, le=500)
+    copies: int = Field(ge=1, le=20)
+    color: bool = False
+    duplex: bool = False
+    spiral: bool = False
 
 
 def current_user(authorization: str = Header(default="")) -> str:
@@ -262,6 +276,32 @@ def advance_order(order_id: str, data: PickupIn, user_id: str = Depends(current_
 @app.post("/v1/orders/{order_id}/cancel")
 def cancel_order(order_id: str, user_id: str = Depends(current_user)):
     return call(service.cancel_order, user_id, order_id)
+
+
+@app.post("/v1/print-jobs", status_code=201)
+def print_request(data: PrintIn, user_id: str = Depends(current_user)):
+    return call(service.submit_print_job, user_id, data.store_id, data.model_dump(exclude={"store_id"}))
+
+
+@app.get("/v1/print-jobs")
+def print_jobs(store_id: str | None = None, user_id: str = Depends(current_user)):
+    return call(service.print_jobs, user_id, store_id)
+
+
+@app.get("/v1/print-jobs/{job_id}/file")
+def print_file(job_id: str, user_id: str = Depends(current_user)):
+    path = call(service.print_file, user_id, job_id)
+    return FileResponse(path, media_type="application/pdf", filename="print-job.pdf")
+
+
+@app.post("/v1/print-jobs/{job_id}/advance")
+def advance_print(job_id: str, data: PickupIn, user_id: str = Depends(current_user)):
+    return call(service.advance_print, user_id, job_id, data.code)
+
+
+@app.post("/v1/print-jobs/{job_id}/cancel")
+def cancel_print(job_id: str, user_id: str = Depends(current_user)):
+    return call(service.cancel_print, user_id, job_id)
 
 
 @app.get("/v1/listings")

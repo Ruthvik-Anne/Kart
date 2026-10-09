@@ -78,6 +78,11 @@ class KartService:
                 (task["id"],)).fetchone()
             if link:
                 result["source_order"] = dict(link)
+            print_link = db.execute("""SELECT p.id,p.status,s.name AS store_name FROM task_print_links l
+                JOIN print_jobs p ON p.id=l.print_job_id JOIN stores s ON s.id=p.store_id WHERE l.task_id=?""",
+                (task["id"],)).fetchone()
+            if print_link:
+                result["source_order"] = {**dict(print_link), "kind": "print"}
         return result
 
     def task(self, user_id: str, task_id: str):
@@ -105,6 +110,14 @@ class KartService:
                 if not order or order["status"] == "cancelled":
                     raise DomainError("Linked order not found", 404)
                 db.execute("INSERT INTO task_order_links VALUES (?,?)", (task_id, order["id"]))
+            if data.get("print_job_id"):
+                if data.get("order_id"):
+                    raise DomainError("A task may link only one source")
+                job = db.execute("SELECT * FROM print_jobs WHERE id=? AND buyer_id=? AND campus_id=?", (
+                    data["print_job_id"], user_id, actor["campus_id"])).fetchone()
+                if not job or job["status"] == "cancelled":
+                    raise DomainError("Linked print job not found", 404)
+                db.execute("INSERT INTO task_print_links VALUES (?,?)", (task_id, job["id"]))
             self._audit(db, actor, "task.created", task_id)
             return {"id": task_id, "status": "open"}
 
@@ -228,6 +241,10 @@ class KartService:
                     WHERE l.task_id=?""", (task_id,)).fetchone()
                 if linked and linked["status"] != "ready":
                     raise DomainError("Linked order must be ready for pickup", 409)
+                print_link = db.execute("""SELECT p.status FROM task_print_links l JOIN print_jobs p ON p.id=l.print_job_id
+                    WHERE l.task_id=?""", (task_id,)).fetchone()
+                if print_link and print_link["status"] != "ready":
+                    raise DomainError("Linked print job must be ready for pickup", 409)
             if action == "approve":
                 post(db, key=f"task:{task_id}:release", kind="task_release", ref=task_id,
                      debit=reserve(task_id), credit=wallet(task["assignee_id"]), amount=task["agreed_amount"])
@@ -250,10 +267,13 @@ class KartService:
                 raise DomainError("Pickup authorization unavailable", 403)
             order = db.execute("""SELECT o.id,o.status FROM task_order_links l JOIN orders o ON o.id=l.order_id
                 WHERE l.task_id=?""", (task_id,)).fetchone()
-            if not order or order["status"] != "ready":
-                raise DomainError("Order is not ready", 409)
-            credential = hmac.new(secret().encode(), order["id"].encode(), hashlib.sha256).hexdigest()[:24]
-            return {"order_id": order["id"], "pickup_code": credential}
+            job = db.execute("""SELECT p.id,p.status FROM task_print_links l JOIN print_jobs p ON p.id=l.print_job_id
+                WHERE l.task_id=?""", (task_id,)).fetchone()
+            source = order or job
+            if not source or source["status"] != "ready":
+                raise DomainError("Linked item is not ready", 409)
+            credential = hmac.new(secret().encode(), source["id"].encode(), hashlib.sha256).hexdigest()[:24]
+            return {"source_id": source["id"], "pickup_code": credential}
 
     def messages(self, user_id: str, task_id: str, bidder_id: str | None = None):
         with self.database.connect() as db:

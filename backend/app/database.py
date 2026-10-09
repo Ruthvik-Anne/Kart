@@ -121,6 +121,20 @@ CREATE TABLE IF NOT EXISTS task_order_links (
   task_id TEXT PRIMARY KEY REFERENCES tasks(id), order_id TEXT NOT NULL REFERENCES orders(id),
   UNIQUE(order_id,task_id)
 );
+CREATE TABLE IF NOT EXISTS print_jobs (
+  id TEXT PRIMARY KEY, campus_id TEXT NOT NULL REFERENCES campuses(id),
+  buyer_id TEXT NOT NULL REFERENCES users(id), store_id TEXT NOT NULL REFERENCES stores(id),
+  file_path TEXT NOT NULL, file_sha256 TEXT NOT NULL, file_name TEXT NOT NULL,
+  pages INTEGER NOT NULL CHECK(pages BETWEEN 1 AND 500), copies INTEGER NOT NULL CHECK(copies BETWEEN 1 AND 20),
+  color INTEGER NOT NULL, duplex INTEGER NOT NULL, spiral INTEGER NOT NULL,
+  amount INTEGER NOT NULL CHECK(amount > 0),
+  status TEXT NOT NULL CHECK(status IN ('placed','preparing','ready','collected','cancelled')),
+  pickup_hash TEXT NOT NULL, created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS print_jobs_store_status ON print_jobs(store_id,status,created_at);
+CREATE TABLE IF NOT EXISTS task_print_links (
+  task_id TEXT PRIMARY KEY REFERENCES tasks(id), print_job_id TEXT NOT NULL REFERENCES print_jobs(id)
+);
 """
 
 

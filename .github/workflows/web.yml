@@ -37,6 +37,7 @@ jobs:
           python-version: '3.12'
       - run: pip install -r ../backend/requirements.txt
       - name: Connected browser smoke
+        timeout-minutes: 5
         env:
           CHROME_PATH: /usr/bin/google-chrome
           KART_DEMO_MODE: '1'
@@ -47,5 +48,5 @@ jobs:
         run: |
           PYTHONPATH=../backend python -m uvicorn app.main:app --port 8000 &
           npx next start -p 3200 &
-          npx --yes wait-on http://localhost:8000/health http://localhost:3200/live
+          npx --yes wait-on --timeout 120000 http://localhost:8000/health http://localhost:3200/live
           node e2e/live.mjs

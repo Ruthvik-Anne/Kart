@@ -31,7 +31,8 @@ python -m unittest discover -s tests -v
 | Identity | Short-lived signed **demo** sessions; all operations scoped to a verified test student and campus. Production identity is intentionally disabled. |
 | Tasks | Anonymous posting, fixed or competitive bids, private proposal conversations, funded assignment, work/review/dispute states. Deadline feasibility and explainable bid ranking. |
 | Linked pickup | Task creator links their own order; work waits for readiness. Only the assigned student can obtain a pickup credential. |
-| Shops | Campus vendor organizations, catalogs, stock, idempotent single-store checkout, vendor preparation queue, credential-based collection, pre-preparation refunds. Canteen, Xerox, stationery and merchandise store categories use this product flow. |
+| Shops | Campus vendor organizations, catalogs, stock, idempotent single-store checkout, vendor preparation queue, credential-based collection, pre-preparation refunds. Canteen, stationery and merchandise use this product flow. |
+| Xerox | Private PDF queue with page/copy/colour/duplex/binding pricing, scoped document download, preparation states, pickup credentials and early cancellation refunds. Development files are stored on the backend volume. |
 | Student sale | Listing, reservation, buyer-confirmed handover, cancellation or refund. Rental dates and returns are not implemented. |
 | Services | Student offerings, funded booking, provider submission, buyer approval, cancellation and administrator dispute resolution. |
 | Events | Club events, capped registration, paid/free tickets and one-time organizer check-in. |

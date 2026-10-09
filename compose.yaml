@@ -7,6 +7,7 @@ services:
       KART_DB_PATH: /data/kart.db
       KART_SESSION_SECRET: ${KART_SESSION_SECRET:?Set KART_SESSION_SECRET to at least 32 random characters}
       KART_DEMO_MODE: "1"
+      KART_UPLOAD_DIR: /data/uploads
     volumes:
       - kart_data:/data
     ports:
