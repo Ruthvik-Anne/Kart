@@ -27,8 +27,8 @@ class KartService:
     @staticmethod
     def _actor(db: sqlite3.Connection, user_id: str):
         actor = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
-        if actor is None:
-            raise DomainError("Unknown user", 401)
+        if actor is None or not actor["verified"]:
+            raise DomainError("Account unavailable", 401)
         return actor
 
     @staticmethod

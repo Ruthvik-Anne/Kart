@@ -134,8 +134,23 @@ class MarketService(KartService):
             if actor["role"] not in ("campus_admin", "platform_admin"):
                 raise DomainError("Administrator required", 403)
             return [dict(row) for row in db.execute(
-                "SELECT id,name FROM users WHERE campus_id=? AND role='student' AND verified=1 ORDER BY name,id LIMIT 500",
+                "SELECT id,name,verified FROM users WHERE campus_id=? AND role='student' ORDER BY name,id LIMIT 500",
                 (actor["campus_id"],))]
+
+    def set_user_suspension(self, admin_id: str, target_id: str, suspended: bool):
+        with self.database.transaction() as db:
+            actor = self._actor(db, admin_id)
+            if actor["role"] not in ("campus_admin", "platform_admin"):
+                raise DomainError("Administrator required", 403)
+            target = db.execute("SELECT * FROM users WHERE id=? AND campus_id=? AND role='student'",
+                                (target_id, actor["campus_id"])).fetchone()
+            if not target:
+                raise DomainError("Student not found", 404)
+            db.execute("UPDATE users SET verified=? WHERE id=?", (int(not suspended), target_id))
+            if suspended:
+                db.execute("DELETE FROM sessions WHERE user_id=?", (target_id,))
+            self._audit(db, actor, "user.suspended" if suspended else "user.reinstated", target_id)
+            return {"id": target_id, "suspended": suspended}
 
     def organizations(self, user_id: str):
         with self.database.connect() as db:

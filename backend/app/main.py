@@ -1,11 +1,13 @@
 """First API slice: real persistence for tasks, conversations, and simulated KC."""
 import os
 import hmac
+import logging
+import time
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from .database import Database
@@ -18,6 +20,24 @@ from .service import DomainError
 
 
 app = FastAPI(title="KART backend", version="0.1.0")
+logger = logging.getLogger("uvicorn.error")
+
+
+@app.middleware("http")
+async def request_guard(request: Request, call_next):
+    request_id = str(uuid4())
+    started = time.monotonic()
+    length = request.headers.get("content-length", "")
+    if length.isdigit() and int(length) > 8_000_000:
+        response = JSONResponse({"detail": "Request too large"}, status_code=413)
+    else:
+        response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    logger.info("request_id=%s method=%s path=%s status=%s duration_ms=%d", request_id,
+                request.method, request.url.path, response.status_code, int((time.monotonic() - started) * 1000))
+    return response
 origins = [value.strip() for value in os.getenv("KART_CORS_ORIGINS", "").split(",") if value.strip()]
 if origins:
     app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=False,
@@ -71,6 +91,10 @@ class OrganizationIn(BaseModel):
 
 class AdminOrganizationIn(OrganizationIn):
     owner_id: str
+
+
+class SuspensionIn(BaseModel):
+    suspended: bool
 
 
 class ProductIn(BaseModel):
@@ -177,6 +201,15 @@ def health():
 @app.head("/health")
 def health_head():
     return None
+
+
+@app.get("/ready")
+def ready():
+    if os.getenv("KART_DEMO_MODE") != "1":
+        auth._config()
+    with service.database.connect() as db:
+        db.execute("SELECT 1").fetchone()
+    return {"status": "ready"}
 
 
 @app.get("/auth/start")
@@ -310,6 +343,11 @@ def provision_organization(data: AdminOrganizationIn, user_id: str = Depends(cur
 @app.get("/v1/admin/users")
 def admin_users(user_id: str = Depends(current_user)):
     return call(service.admin_users, user_id)
+
+
+@app.post("/v1/admin/users/{target_id}/suspension")
+def suspend_user(target_id: str, data: SuspensionIn, user_id: str = Depends(current_user)):
+    return call(service.set_user_suspension, user_id, target_id, data.suspended)
 
 
 @app.get("/v1/organizations/mine")

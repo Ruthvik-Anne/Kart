@@ -73,6 +73,14 @@ class OidcTests(unittest.TestCase):
                     "x-kart-csrf": admin["csrf"]}, json=body)
                 self.assertEqual(approved.status_code, 201, approved.text)
                 self.assertTrue(approved.json()["store_id"])
+                suspend = client.post(f"/v1/admin/users/{student['id']}/suspension", headers={**admin_headers,
+                    "x-kart-csrf": admin["csrf"]}, json={"suspended": True})
+                self.assertEqual(suspend.status_code, 200, suspend.text)
+                self.assertEqual(client.get("/auth/session", headers=student_headers).status_code, 401)
+                self.assertEqual(client.get("/v1/stores", headers=student_headers).status_code, 401)
+                self.assertEqual(client.post(f"/v1/admin/users/{student['id']}/suspension", headers={**admin_headers,
+                    "x-kart-csrf": admin["csrf"]}, json={"suspended": False}).status_code, 200)
+                self.assertEqual(client.get("/auth/session", headers=student_headers).status_code, 401)
                 self.assertEqual(client.post("/dev/organizations", headers={**admin_headers,
                     "x-kart-csrf": admin["csrf"]}, json=body).status_code, 404)
                 self.assertEqual(client.post("/auth/logout", headers={**admin_headers,

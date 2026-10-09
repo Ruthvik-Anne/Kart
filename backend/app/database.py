@@ -177,7 +177,6 @@ class Database:
         with self.connect() as connection:
             connection.execute("PRAGMA journal_mode=WAL")
             connection.executescript(SCHEMA)
-            connection.execute("PRAGMA user_version=1")
 
     @contextmanager
     def connect(self):

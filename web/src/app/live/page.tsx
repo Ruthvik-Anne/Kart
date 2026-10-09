@@ -48,7 +48,7 @@ export default function LiveWorkspace() {
   const [session, setSession] = useState<LiveSession | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [demoMode, setDemoMode] = useState<boolean | null>(null);
-  const [campusUsers, setCampusUsers] = useState<{ id: string; name: string }[]>([]);
+  const [campusUsers, setCampusUsers] = useState<{ id: string; name: string; verified: number }[]>([]);
   const [tab, setTab] = useState<Tab>('tasks');
   const [notice, setNotice] = useState('');
   const [pending, setPending] = useState(false);
@@ -119,7 +119,7 @@ export default function LiveWorkspace() {
 
   useEffect(() => {
     if (session?.role === 'campus_admin' || session?.role === 'platform_admin') {
-      void backend<{ id: string; name: string }[]>('v1/admin/users', session.token).then(setCampusUsers).catch(() => setCampusUsers([]));
+      void backend<{ id: string; name: string; verified: number }[]>('v1/admin/users', session.token).then(setCampusUsers).catch(() => setCampusUsers([]));
     }
   }, [session]);
 
@@ -351,10 +351,19 @@ export default function LiveWorkspace() {
             owner_id: field(form, 'owner'), name: field(form, 'name'), type: 'vendor', store_type: field(form, 'type'),
           }), 'Shop approved')}>
             <select className={inputClass} name="owner" required><option value="">Select verified student owner</option>
-              {campusUsers.map(user => <option key={user.id} value={user.id}>{user.name} · {user.id.slice(0, 8)}</option>)}</select>
+              {campusUsers.filter(user => user.verified).map(user => <option key={user.id} value={user.id}>{user.name} · {user.id.slice(0, 8)}</option>)}</select>
             <input className={inputClass} name="name" placeholder="Shop name" minLength={2} required />
             <select className={inputClass} name="type"><option value="canteen">Canteen</option><option value="xerox">Xerox</option><option value="stationery">Stationery</option><option value="merch">Custom merchandise</option></select>
             <FormButton>Approve shop</FormButton></form></Card>}
+        {!demoMode && ['campus_admin', 'platform_admin'].includes(session.role ?? '') &&
+          <Card title="Campus account review"><div className="grid gap-2">{campusUsers.map(user =>
+            <div key={user.id} className="flex items-center justify-between gap-2 rounded-lg border border-line p-2 text-xs">
+              <span>{user.name} · {user.id.slice(0, 8)} · {user.verified ? 'active' : 'suspended'}</span>
+              <Button onClick={() => void run(`v1/admin/users/${user.id}/suspension`, { suspended: Boolean(user.verified) },
+                user.verified ? 'Account suspended' : 'Account reinstated').then(result => {
+                  if (result) setCampusUsers(current => current.map(item => item.id === user.id ? { ...item, verified: user.verified ? 0 : 1 } : item));
+                })}>{user.verified ? 'Suspend' : 'Reinstate'}</Button>
+            </div>)}{!campusUsers.length && <p className="text-xs text-muted">No student accounts yet.</p>}</div></Card>}
       </div>
       <div className="grid content-start gap-5"><Card title="Your shop management">
         {myStores.map(org => <div key={org.id} className="mb-4 rounded-xl bg-forest-100 p-3">
@@ -450,7 +459,7 @@ export default function LiveWorkspace() {
           <form className="mb-4 grid gap-2" onSubmit={submit('v1/admin/organizations', form => ({
             owner_id: field(form, 'owner'), name: field(form, 'name'), type: 'club', store_type: null,
           }), 'Club approved')}><select className={inputClass} name="owner" required><option value="">Select verified organizer</option>
-            {campusUsers.map(user => <option key={user.id} value={user.id}>{user.name} · {user.id.slice(0, 8)}</option>)}</select>
+            {campusUsers.filter(user => user.verified).map(user => <option key={user.id} value={user.id}>{user.name} · {user.id.slice(0, 8)}</option>)}</select>
             <input className={inputClass} name="name" minLength={2} placeholder="Club name" required /><FormButton>Approve club</FormButton></form>}
         {clubs.map(club => <form key={club.id} className="mb-4 grid gap-2 border-t border-line pt-3" onSubmit={submit(`v1/organizations/${club.id}/events`, form => ({
           title: field(form, 'title'), description: field(form, 'description'),
