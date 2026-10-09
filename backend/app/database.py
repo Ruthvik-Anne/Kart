@@ -51,6 +51,76 @@ CREATE TABLE IF NOT EXISTS audit_events (
   id TEXT PRIMARY KEY, campus_id TEXT NOT NULL, actor_id TEXT NOT NULL,
   action TEXT NOT NULL, target_id TEXT NOT NULL, created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS organizations (
+  id TEXT PRIMARY KEY, campus_id TEXT NOT NULL REFERENCES campuses(id),
+  name TEXT NOT NULL, type TEXT NOT NULL CHECK(type IN ('vendor','club'))
+);
+CREATE TABLE IF NOT EXISTS memberships (
+  user_id TEXT NOT NULL REFERENCES users(id), organization_id TEXT NOT NULL REFERENCES organizations(id),
+  role TEXT NOT NULL CHECK(role IN ('owner','staff')), PRIMARY KEY(user_id,organization_id)
+);
+CREATE TABLE IF NOT EXISTS stores (
+  id TEXT PRIMARY KEY, campus_id TEXT NOT NULL REFERENCES campuses(id),
+  organization_id TEXT NOT NULL REFERENCES organizations(id), name TEXT NOT NULL,
+  type TEXT NOT NULL CHECK(type IN ('canteen','xerox','stationery','merch')),
+  open INTEGER NOT NULL DEFAULT 1 CHECK(open IN (0,1))
+);
+CREATE TABLE IF NOT EXISTS products (
+  id TEXT PRIMARY KEY, store_id TEXT NOT NULL REFERENCES stores(id), name TEXT NOT NULL,
+  description TEXT NOT NULL, price INTEGER NOT NULL CHECK(price > 0),
+  stock INTEGER NOT NULL CHECK(stock >= 0), active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1))
+);
+CREATE TABLE IF NOT EXISTS orders (
+  id TEXT PRIMARY KEY, campus_id TEXT NOT NULL REFERENCES campuses(id),
+  buyer_id TEXT NOT NULL REFERENCES users(id), store_id TEXT NOT NULL REFERENCES stores(id),
+  request_key TEXT NOT NULL, fingerprint TEXT NOT NULL,
+  amount INTEGER NOT NULL CHECK(amount > 0),
+  status TEXT NOT NULL CHECK(status IN ('placed','preparing','ready','collected','cancelled')),
+  pickup_hash TEXT NOT NULL, created_at INTEGER NOT NULL,
+  UNIQUE(buyer_id,request_key)
+);
+CREATE INDEX IF NOT EXISTS orders_store_status ON orders(store_id,status,created_at);
+CREATE TABLE IF NOT EXISTS order_items (
+  order_id TEXT NOT NULL REFERENCES orders(id), product_id TEXT NOT NULL REFERENCES products(id),
+  name TEXT NOT NULL, price INTEGER NOT NULL CHECK(price > 0), quantity INTEGER NOT NULL CHECK(quantity > 0),
+  PRIMARY KEY(order_id,product_id)
+);
+CREATE TABLE IF NOT EXISTS student_listings (
+  id TEXT PRIMARY KEY, campus_id TEXT NOT NULL REFERENCES campuses(id), seller_id TEXT NOT NULL REFERENCES users(id),
+  title TEXT NOT NULL, description TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount > 0),
+  kind TEXT NOT NULL CHECK(kind IN ('sale','rental')),
+  status TEXT NOT NULL CHECK(status IN ('active','reserved','completed','withdrawn')),
+  buyer_id TEXT REFERENCES users(id), created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS listings_campus_status ON student_listings(campus_id,status);
+CREATE TABLE IF NOT EXISTS services (
+  id TEXT PRIMARY KEY, campus_id TEXT NOT NULL REFERENCES campuses(id), provider_id TEXT NOT NULL REFERENCES users(id),
+  title TEXT NOT NULL, description TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount > 0),
+  active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)), created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS service_bookings (
+  id TEXT PRIMARY KEY, campus_id TEXT NOT NULL REFERENCES campuses(id), service_id TEXT NOT NULL REFERENCES services(id),
+  buyer_id TEXT NOT NULL REFERENCES users(id), provider_id TEXT NOT NULL REFERENCES users(id),
+  amount INTEGER NOT NULL CHECK(amount > 0), status TEXT NOT NULL CHECK(status IN ('requested','in_progress','submitted','completed','cancelled','disputed')),
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS events (
+  id TEXT PRIMARY KEY, campus_id TEXT NOT NULL REFERENCES campuses(id),
+  organization_id TEXT NOT NULL REFERENCES organizations(id), title TEXT NOT NULL,
+  description TEXT NOT NULL, starts_at INTEGER NOT NULL,
+  capacity INTEGER NOT NULL CHECK(capacity > 0), price INTEGER NOT NULL CHECK(price >= 0),
+  status TEXT NOT NULL CHECK(status IN ('draft','published','cancelled'))
+);
+CREATE TABLE IF NOT EXISTS tickets (
+  id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES events(id), attendee_id TEXT NOT NULL REFERENCES users(id),
+  code_hash TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('valid','used','cancelled')),
+  created_at INTEGER NOT NULL, UNIQUE(event_id,attendee_id)
+);
+CREATE INDEX IF NOT EXISTS tickets_event ON tickets(event_id,status);
+CREATE TABLE IF NOT EXISTS task_order_links (
+  task_id TEXT PRIMARY KEY REFERENCES tasks(id), order_id TEXT NOT NULL REFERENCES orders(id),
+  UNIQUE(order_id,task_id)
+);
 """
 
 

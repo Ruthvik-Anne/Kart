@@ -18,6 +18,14 @@ def reserve(task_id: str) -> str:
     return f"reserve:{task_id}"
 
 
+def vendor_payable(organization_id: str) -> str:
+    return f"vendor_payable:{organization_id}"
+
+
+def organizer_payable(organization_id: str) -> str:
+    return f"organizer_payable:{organization_id}"
+
+
 def balance(db: sqlite3.Connection, account: str) -> int:
     row = db.execute("""SELECT COALESCE(SUM(CASE side WHEN 'credit' THEN amount ELSE -amount END),0) AS n
                         FROM postings WHERE account=?""", (account,)).fetchone()

@@ -1,0 +1,32 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      KART_DB_PATH: /data/kart.db
+      KART_SESSION_SECRET: ${KART_SESSION_SECRET:?Set KART_SESSION_SECRET to at least 32 random characters}
+      KART_DEMO_MODE: "1"
+    volumes:
+      - kart_data:/data
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  web:
+    build:
+      context: ./web
+    environment:
+      KART_BACKEND_URL: http://backend:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  kart_data:

@@ -34,6 +34,6 @@ Production work needs a server-side identity and permissions system, transaction
 
 A fuller, role-based front-end lives in [`web/`](web/README.md): separate experiences for students, providers, vendors (by store type), campus admins and platform admins, a ranked task board with private task chat, a double-entry KC ledger with escrow, and a simulated audit chain. The vanilla prototype above remains for reference.
 
-## Backend foundation
+## Connected backend demo
 
-A persistent FastAPI implementation for campus-scoped tasks, bidding, private messages, and simulated KC reservations is under [`backend/`](backend/README.md). The Next.js frontend remains a separate browser mock until each API is connected. No real-money wallet or settlement is enabled.
+The persistent FastAPI service and API-backed Next.js workspace are documented in [`backend/`](backend/README.md). Run `docker compose up --build` with a local `KART_SESSION_SECRET` and open `/live` for the connected demo. The original browser-only prototype remains at `/login`. KC has no monetary value in this build.

@@ -67,12 +67,24 @@ class KartService:
             tasks = db.execute("""SELECT * FROM tasks WHERE campus_id=? AND
                  (status='open' OR poster_id=? OR assignee_id=?) ORDER BY created_at DESC""",
                 (actor["campus_id"], user_id, user_id)).fetchall()
-            return [self._project(t, actor) for t in tasks]
+            return [self._project_with_source(db, t, actor) for t in tasks]
+
+    @classmethod
+    def _project_with_source(cls, db, task, actor):
+        result = cls._project(task, actor)
+        if actor["id"] in (task["poster_id"], task["assignee_id"]):
+            link = db.execute("""SELECT o.id,o.status,s.name AS store_name FROM task_order_links l
+                JOIN orders o ON o.id=l.order_id JOIN stores s ON s.id=o.store_id WHERE l.task_id=?""",
+                (task["id"],)).fetchone()
+            if link:
+                result["source_order"] = dict(link)
+        return result
 
     def task(self, user_id: str, task_id: str):
         with self.database.connect() as db:
             actor = self._actor(db, user_id)
-            return self._project(self._task(db, actor, task_id), actor)
+            task = self._task(db, actor, task_id)
+            return self._project_with_source(db, task, actor)
 
     def create_task(self, user_id: str, data: dict):
         with self.database.transaction() as db:
@@ -87,6 +99,12 @@ class KartService:
                 data["category"], int(data["anonymous"]), data["urgency"], data["pricing"],
                 data["budget"], data["deadline"], "open", int(time.time()),
             ))
+            if data.get("order_id"):
+                order = db.execute("SELECT * FROM orders WHERE id=? AND buyer_id=? AND campus_id=?", (
+                    data["order_id"], user_id, actor["campus_id"])).fetchone()
+                if not order or order["status"] == "cancelled":
+                    raise DomainError("Linked order not found", 404)
+                db.execute("INSERT INTO task_order_links VALUES (?,?)", (task_id, order["id"]))
             self._audit(db, actor, "task.created", task_id)
             return {"id": task_id, "status": "open"}
 
@@ -121,6 +139,42 @@ class KartService:
                 raise DomainError("Only the poster can compare bids", 403)
             return [dict(b) for b in db.execute("SELECT * FROM bids WHERE task_id=? ORDER BY amount,created_at", (task_id,))]
 
+    def bid_recommendations(self, user_id: str, task_id: str):
+        """Explainable feasibility and ranking; the poster still chooses the worker."""
+        with self.database.connect() as db:
+            actor = self._actor(db, user_id)
+            task = self._task(db, actor, task_id)
+            if task["poster_id"] != user_id:
+                raise DomainError("Only the poster can compare bids", 403)
+            rows = db.execute("""SELECT b.*,
+                (SELECT COUNT(*) FROM tasks t WHERE t.assignee_id=b.bidder_id AND t.status='completed') AS completed,
+                (SELECT COUNT(*) FROM tasks t WHERE t.assignee_id=b.bidder_id AND t.status='cancelled') AS cancelled,
+                (SELECT COUNT(*) FROM tasks t WHERE t.assignee_id=b.bidder_id) AS assignments
+                FROM bids b WHERE b.task_id=?""", (task_id,)).fetchall()
+            if not rows:
+                return {"estimate_minutes": None, "confidence": "none", "ranked": []}
+            times = sorted(b["eta_minutes"] for b in rows)
+            median = times[len(times) // 2]
+            estimate = {"low": max(1, int(median * 0.8)), "high": int(median * 1.3) + 1}
+            max_eta = max(b["eta_minutes"] for b in rows)
+            max_price = max(b["amount"] for b in rows)
+            ranked = []
+            for bid in rows:
+                feasible = int(time.time()) + bid["eta_minutes"] * 60 <= task["deadline"]
+                price_score = 1 - bid["amount"] / (max_price + 1)
+                speed_score = 1 - bid["eta_minutes"] / (max_eta + 1)
+                reliability = (bid["completed"] + 1) / (bid["completed"] + bid["cancelled"] + 2)
+                opportunity = 1 / (bid["assignments"] + 1)
+                weights = (0.25, 0.45, 0.20, 0.10) if task["urgency"] == "urgent" else (0.40, 0.25, 0.25, 0.10)
+                score = round(100 * sum(a * b for a, b in zip(weights, (price_score, speed_score, reliability, opportunity))), 1)
+                ranked.append({"bid_id": bid["id"], "bidder_id": bid["bidder_id"], "amount": bid["amount"],
+                               "eta_minutes": bid["eta_minutes"], "feasible": feasible, "score": score,
+                               "completed": bid["completed"], "cancelled": bid["cancelled"],
+                               "reason": "Fits the deadline" if feasible else "ETA exceeds the deadline"})
+            ranked.sort(key=lambda r: (not r["feasible"], -r["score"], r["bid_id"]))
+            return {"estimate_minutes": estimate, "confidence": "medium" if len(rows) >= 3 else "low",
+                    "ranked": ranked, "method": "deterministic-v1"}
+
     def accept(self, user_id: str, task_id: str, bid_id: str):
         with self.database.transaction() as db:
             actor = self._actor(db, user_id)
@@ -132,6 +186,8 @@ class KartService:
             bid = db.execute("SELECT * FROM bids WHERE id=? AND task_id=?", (bid_id, task_id)).fetchone()
             if not bid:
                 raise DomainError("Bid not found", 404)
+            if int(time.time()) + bid["eta_minutes"] * 60 > task["deadline"]:
+                raise DomainError("Worker ETA exceeds task deadline", 409)
             worker = self._actor(db, bid["bidder_id"])
             self._student(worker)
             if worker["campus_id"] != actor["campus_id"]:
@@ -167,6 +223,11 @@ class KartService:
                 raise DomainError("Not a task participant", 403)
             if task["status"] != before:
                 raise DomainError("Invalid task transition", 409)
+            if action == "start":
+                linked = db.execute("""SELECT o.status FROM task_order_links l JOIN orders o ON o.id=l.order_id
+                    WHERE l.task_id=?""", (task_id,)).fetchone()
+                if linked and linked["status"] != "ready":
+                    raise DomainError("Linked order must be ready for pickup", 409)
             if action == "approve":
                 post(db, key=f"task:{task_id}:release", kind="task_release", ref=task_id,
                      debit=reserve(task_id), credit=wallet(task["assignee_id"]), amount=task["agreed_amount"])
@@ -176,6 +237,23 @@ class KartService:
             db.execute("UPDATE tasks SET status=? WHERE id=?", (after, task_id))
             self._audit(db, actor, "task." + action, task_id)
             return {"id": task_id, "status": after}
+
+    def pickup_credential(self, user_id: str, task_id: str):
+        from .security import secret
+        import hashlib
+        import hmac
+
+        with self.database.connect() as db:
+            actor = self._actor(db, user_id)
+            task = self._task(db, actor, task_id)
+            if user_id != task["assignee_id"] or task["status"] not in ("assigned", "in_progress"):
+                raise DomainError("Pickup authorization unavailable", 403)
+            order = db.execute("""SELECT o.id,o.status FROM task_order_links l JOIN orders o ON o.id=l.order_id
+                WHERE l.task_id=?""", (task_id,)).fetchone()
+            if not order or order["status"] != "ready":
+                raise DomainError("Order is not ready", 409)
+            credential = hmac.new(secret().encode(), order["id"].encode(), hashlib.sha256).hexdigest()[:24]
+            return {"order_id": order["id"], "pickup_code": credential}
 
     def messages(self, user_id: str, task_id: str, bidder_id: str | None = None):
         with self.database.connect() as db:

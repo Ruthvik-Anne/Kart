@@ -3,15 +3,21 @@ import os
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from .database import Database
+from .market import MarketService
 from .security import secret, sign, verify
-from .service import DomainError, KartService
+from .service import DomainError
 
 
 app = FastAPI(title="KART backend", version="0.1.0")
-service = KartService(Database())
+origins = [value.strip() for value in os.getenv("KART_CORS_ORIGINS", "").split(",") if value.strip()]
+if origins:
+    app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=False,
+                       allow_methods=["GET", "POST"], allow_headers=["Authorization", "Content-Type"])
+service = MarketService(Database())
 
 
 class TaskIn(BaseModel):
@@ -23,6 +29,7 @@ class TaskIn(BaseModel):
     pricing: str = Field(pattern="^(fixed|bidding)$")
     budget: int = Field(gt=0, le=1_000_000)
     deadline: int
+    order_id: str | None = None
 
 
 class BidIn(BaseModel):
@@ -48,6 +55,63 @@ class GrantIn(BaseModel):
 
 class DisputeDecision(BaseModel):
     release_to_worker: bool
+
+
+class OrganizationIn(BaseModel):
+    name: str = Field(min_length=2, max_length=100)
+    type: str = Field(pattern="^(vendor|club)$")
+    store_type: str | None = None
+
+
+class ProductIn(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    description: str = Field(default="", max_length=2000)
+    price: int = Field(gt=0, le=1_000_000)
+    stock: int = Field(ge=0, le=1_000_000)
+
+
+class CartItem(BaseModel):
+    product_id: str
+    quantity: int = Field(gt=0, le=50)
+
+
+class CheckoutIn(BaseModel):
+    store_id: str
+    items: list[CartItem] = Field(min_length=1, max_length=50)
+    request_key: str = Field(min_length=8, max_length=100)
+
+
+class PickupIn(BaseModel):
+    code: str | None = None
+
+
+class ListingIn(BaseModel):
+    title: str = Field(min_length=3, max_length=120)
+    description: str = Field(min_length=3, max_length=4000)
+    amount: int = Field(gt=0, le=1_000_000)
+    kind: str = Field(pattern="^(sale|rental)$")
+
+
+class ServiceIn(BaseModel):
+    title: str = Field(min_length=3, max_length=120)
+    description: str = Field(min_length=3, max_length=4000)
+    amount: int = Field(gt=0, le=1_000_000)
+
+
+class EventIn(BaseModel):
+    title: str = Field(min_length=3, max_length=120)
+    description: str = Field(min_length=3, max_length=4000)
+    starts_at: int
+    capacity: int = Field(gt=0, le=100_000)
+    price: int = Field(ge=0, le=1_000_000)
+
+
+class CodeIn(BaseModel):
+    code: str = Field(min_length=10, max_length=100)
+
+
+class BookingDecision(BaseModel):
+    release_to_provider: bool
 
 
 def current_user(authorization: str = Header(default="")) -> str:
@@ -115,6 +179,11 @@ def bids(task_id: str, user_id: str = Depends(current_user)):
     return call(service.bids, user_id, task_id)
 
 
+@app.get("/v1/tasks/{task_id}/recommendations")
+def recommendations(task_id: str, user_id: str = Depends(current_user)):
+    return call(service.bid_recommendations, user_id, task_id)
+
+
 @app.post("/v1/tasks/{task_id}/bids/{bid_id}/accept")
 def accept(task_id: str, bid_id: str, user_id: str = Depends(current_user)):
     return call(service.accept, user_id, task_id, bid_id)
@@ -123,6 +192,11 @@ def accept(task_id: str, bid_id: str, user_id: str = Depends(current_user)):
 @app.post("/v1/tasks/{task_id}/actions/{action}")
 def transition(task_id: str, action: str, user_id: str = Depends(current_user)):
     return call(service.transition, user_id, task_id, action)
+
+
+@app.get("/v1/tasks/{task_id}/pickup")
+def pickup_credential(task_id: str, user_id: str = Depends(current_user)):
+    return call(service.pickup_credential, user_id, task_id)
 
 
 @app.post("/v1/tasks/{task_id}/resolve")
@@ -143,3 +217,123 @@ def message(task_id: str, data: MessageIn, user_id: str = Depends(current_user))
 @app.get("/v1/wallet")
 def wallet(user_id: str = Depends(current_user)):
     return call(service.wallet, user_id)
+
+
+@app.post("/dev/organizations", status_code=201, include_in_schema=False)
+def demo_organization(data: OrganizationIn, user_id: str = Depends(current_user)):
+    return call(service.create_organization, user_id, data.name, data.type, data.store_type)
+
+
+@app.get("/v1/organizations/mine")
+def organizations(user_id: str = Depends(current_user)):
+    return call(service.organizations, user_id)
+
+
+@app.get("/v1/stores")
+def stores(user_id: str = Depends(current_user)):
+    return call(service.stores, user_id)
+
+
+@app.get("/v1/catalog")
+def catalog(store_id: str | None = None, user_id: str = Depends(current_user)):
+    return call(service.catalog, user_id, store_id)
+
+
+@app.post("/v1/stores/{store_id}/products", status_code=201)
+def product(store_id: str, data: ProductIn, user_id: str = Depends(current_user)):
+    return call(service.add_product, user_id, store_id, data.model_dump())
+
+
+@app.post("/v1/orders", status_code=201)
+def checkout(data: CheckoutIn, user_id: str = Depends(current_user)):
+    return call(service.checkout, user_id, data.store_id, [i.model_dump() for i in data.items], data.request_key)
+
+
+@app.get("/v1/orders")
+def orders(store_id: str | None = None, user_id: str = Depends(current_user)):
+    return call(service.orders, user_id, store_id)
+
+
+@app.post("/v1/orders/{order_id}/advance")
+def advance_order(order_id: str, data: PickupIn, user_id: str = Depends(current_user)):
+    return call(service.advance_order, user_id, order_id, data.code)
+
+
+@app.post("/v1/orders/{order_id}/cancel")
+def cancel_order(order_id: str, user_id: str = Depends(current_user)):
+    return call(service.cancel_order, user_id, order_id)
+
+
+@app.get("/v1/listings")
+def listings(user_id: str = Depends(current_user)):
+    return call(service.listings, user_id)
+
+
+@app.post("/v1/listings", status_code=201)
+def create_listing(data: ListingIn, user_id: str = Depends(current_user)):
+    return call(service.create_listing, user_id, data.model_dump())
+
+
+@app.post("/v1/listings/{listing_id}/reserve")
+def reserve_listing(listing_id: str, user_id: str = Depends(current_user)):
+    return call(service.reserve_listing, user_id, listing_id)
+
+
+@app.post("/v1/listings/{listing_id}/actions/{action}")
+def listing_action(listing_id: str, action: str, user_id: str = Depends(current_user)):
+    return call(service.listing_action, user_id, listing_id, action)
+
+
+@app.get("/v1/services")
+def services(user_id: str = Depends(current_user)):
+    return call(service.services, user_id)
+
+
+@app.post("/v1/services", status_code=201)
+def create_service(data: ServiceIn, user_id: str = Depends(current_user)):
+    return call(service.create_service, user_id, data.model_dump())
+
+
+@app.post("/v1/services/{service_id}/book")
+def book_service(service_id: str, user_id: str = Depends(current_user)):
+    return call(service.book_service, user_id, service_id)
+
+
+@app.get("/v1/bookings")
+def bookings(user_id: str = Depends(current_user)):
+    return call(service.bookings, user_id)
+
+
+@app.post("/v1/bookings/{booking_id}/actions/{action}")
+def booking_action(booking_id: str, action: str, user_id: str = Depends(current_user)):
+    return call(service.booking_action, user_id, booking_id, action)
+
+
+@app.post("/v1/bookings/{booking_id}/resolve")
+def resolve_booking(booking_id: str, data: BookingDecision, user_id: str = Depends(current_user)):
+    return call(service.resolve_booking, user_id, booking_id, data.release_to_provider)
+
+
+@app.get("/v1/events")
+def events(user_id: str = Depends(current_user)):
+    return call(service.events, user_id)
+
+
+@app.post("/v1/organizations/{organization_id}/events", status_code=201)
+def create_event(organization_id: str, data: EventIn, user_id: str = Depends(current_user)):
+    return call(service.create_event, user_id, organization_id, data.model_dump())
+
+
+@app.post("/v1/events/{event_id}/register")
+def register_event(event_id: str, user_id: str = Depends(current_user)):
+    return call(service.register_event, user_id, event_id)
+
+
+@app.get("/v1/tickets")
+def tickets(user_id: str = Depends(current_user)):
+    return call(service.tickets, user_id)
+
+
+@app.post("/v1/tickets/{ticket_id}/check-in")
+def check_in(ticket_id: str, data: CodeIn, user_id: str = Depends(current_user)):
+    return call(service.check_in, user_id, ticket_id, data.code)

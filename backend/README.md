@@ -1,47 +1,51 @@
-# KART backend: first implementation slice
+# KART connected development stack
 
-This service replaces the browser mock for **tasks, bids, private conversations, and simulated KC reservations**. It is a FastAPI modular monolith with SQLite transactions for local development. The existing `web/` app still uses `localStorage`; it has **not** been wired to these endpoints yet.
+The repository contains a Next.js prototype at `/login` and a connected workspace at `/live`. The connected workspace uses this FastAPI service through a same-origin Next.js route. It persists campus data in SQLite and supports the workflows below with **simulated KC only**.
 
-## Run
+## Run both apps
+
+```bash
+export KART_SESSION_SECRET="replace-this-with-at-least-32-random-characters"
+docker compose up --build
+```
+
+Open <http://localhost:3000/live>. A demo student may create a test identity and receive test KC. Open a private window to create another student in the same campus and exercise bidding, purchases, handover, services, and events. `GET /health` and `/docs` are on port 8000. A named Docker volume keeps development data across restarts. Do not deploy this compose configuration: `KART_DEMO_MODE=1` permits anyone to create test students and test shops.
+
+For backend-only development:
 
 ```bash
 cd backend
 python -m venv .venv
 . .venv/bin/activate
-pip install -r requirements.txt
-export KART_DB_PATH=./kart.db
-export KART_SESSION_SECRET="replace-with-at-least-32-random-characters"
-export KART_DEMO_MODE=1
+pip install -r requirements.txt httpx
+export KART_DB_PATH=./kart.db KART_DEMO_MODE=1
+export KART_SESSION_SECRET="replace-this-with-at-least-32-random-characters"
 uvicorn app.main:app --reload
 python -m unittest discover -s tests -v
 ```
 
-Open `/docs` for the API contract. In demo mode, `POST /dev/users` creates a verified **test** student and returns a signed short-lived bearer token. `POST /dev/kc-grants` issues *simulated* KC to that student with an idempotency key. Those development routes are absent unless `KART_DEMO_MODE=1`. Never deploy with that flag enabled.
+## Implemented workflows
 
-## Workflow and data guarantees
-
-- Every read and write checks the authenticated actor's campus; anonymous task projections hide the poster ID from other students.
-- One bid per worker per task. Before assignment each bidder has a separate private thread with the poster; after assignment only the two participants can use the execution thread.
-- Accepting a bid reserves the agreed KC atomically with assignment. Approval releases it once; cancellation before work refunds it; disputed funds require an administrator decision. Failed operations roll back.
-- The journal is append-only, balanced with paired postings, uses unique idempotency keys, and computes balances from postings. KC here has **no monetary value**. It is not an actual wallet, escrow service, payment rail, blockchain, or guarantee of payment.
-- Startup creates the development schema. SQLite is suitable for local use; migrate to PostgreSQL with managed migrations and transaction locking before multi-instance deployment.
-
-## Migration map
-
-| Existing prototype | Backend boundary |
+| Area | Backend behavior |
 |---|---|
-| `web/src/mock/db.ts` task methods | `/v1/tasks`, bids, actions, messages |
-| `web/src/ledger/` | `app/ledger.py` and `journal`/`postings` in the database |
-| `web/src/rbac/policy.ts` | Server authorization in `app/service.py` |
-| `web/src/chain/` | Audit anchoring later; current audit events are database records |
-| `web/src/integrations/ppi.ts` | Partner integration later; no production top-ups or payouts |
+| Identity | Short-lived signed **demo** sessions; all operations scoped to a verified test student and campus. Production identity is intentionally disabled. |
+| Tasks | Anonymous posting, fixed or competitive bids, private proposal conversations, funded assignment, work/review/dispute states. Deadline feasibility and explainable bid ranking. |
+| Linked pickup | Task creator links their own order; work waits for readiness. Only the assigned student can obtain a pickup credential. |
+| Shops | Campus vendor organizations, catalogs, stock, idempotent single-store checkout, vendor preparation queue, credential-based collection, pre-preparation refunds. Canteen, Xerox, stationery and merchandise store categories use this product flow. |
+| Student sale | Listing, reservation, buyer-confirmed handover, cancellation or refund. Rental dates and returns are not implemented. |
+| Services | Student offerings, funded booking, provider submission, buyer approval, cancellation and administrator dispute resolution. |
+| Events | Club events, capped registration, paid/free tickets and one-time organizer check-in. |
+| KC ledger | Paired append-only postings, derived balances, idempotency keys, atomic reserves/releases/refunds. Test grants have no monetary backing. |
 
-## Next implementation slices
+## Data and authorization boundaries
 
-1. Replace development identities with verified college login, memberships, scoped staff permissions, and campus onboarding. Add migrations and PostgreSQL.
-2. Add vendor catalogs and separate order workflows for canteen, Xerox, stationery, events, merchandise, student listings and services. Link pickup tasks only after authorizing the originating order.
-3. Add uploads in private storage, pickup tokens, notifications, reviews, moderation, and refunds.
-4. Integrate an approved payment/custody arrangement after its contractual and regulatory terms are known. Reconcile every provider event to ledger entries. Do not translate simulated KC grants into real funds.
-5. Replace `web/src/mock/StoreProvider.tsx` with a typed API client incrementally; retain mock mode for UI testing until each endpoint is complete.
+- SQLite `BEGIN IMMEDIATE` serializes contested stock, capacity, bid acceptance, and reservations. A failed operation rolls back the ledger and workflow together.
+- Listing, task, service and event data are scoped by campus. Sensitive task messages are limited to poster and participant; anonymous poster IDs are omitted from other students' projections.
+- Order and ticket pickup codes are derived from the server secret and only their hashes are stored. Replace this demo design with rotating, limited-use credentials and operational rate limits before launch.
+- The frontend prototype remains at `/login` for visual comparison. `/live` is connected to the persistent backend; it does not silently write to the browser mock.
 
-**Current boundaries:** no production identity, merchant settlement, bank custody, payment guarantee, network blockchain, file upload, or frontend integration. The API is a working backend foundation, not a deployable payment product.
+## Production gates
+
+This is an end-to-end **development demo**, not a live payments product. Before a real launch: implement verified college login and session management, scoped staff onboarding and approval, PostgreSQL with migrations, private file storage for Xerox and attachments, moderation and dispute evidence, rate limiting, observability, reconciliation, and the reviewed payment custody/settlement integration. Actual KC top-ups, vendor payouts, e₹ transfers, and a blockchain network are not connected. The current audit log is a database table; it is not a blockchain.
+
+Run `PYTHONPATH=backend python -m unittest discover -s backend/tests -v` from the repository root. CI installs FastAPI and HTTPX and runs an HTTP integration test in addition to the service tests. The web workflow runs type checking, unit tests and the Next.js build.

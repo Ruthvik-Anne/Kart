@@ -88,6 +88,17 @@ class ServiceTests(unittest.TestCase):
         self.service.message("poster", task_id, "Meet at library")
         self.assertEqual(self.service.messages("worker", task_id)[0]["sender_id"], "anonymous-poster")
 
+    def test_explainable_rank_excludes_unfeasible_eta_from_top(self):
+        task_id = self.task()
+        self.bid(task_id, "worker")
+        self.service.bid("other", task_id, {"amount": 10, "eta_minutes": 10_000, "note": "cheap"})
+        result = self.service.bid_recommendations("poster", task_id)
+        self.assertEqual(result["confidence"], "low")
+        self.assertEqual(result["ranked"][0]["bidder_id"], "worker")
+        self.assertFalse(result["ranked"][1]["feasible"])
+        with self.assertRaises(DomainError):
+            self.service.bid_recommendations("worker", task_id)
+
     def test_refund_and_dispute_resolution(self):
         task_id = self.task()
         bid_id = self.bid(task_id)
