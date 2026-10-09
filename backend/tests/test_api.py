@@ -21,6 +21,7 @@ class ApiIntegrationTests(unittest.TestCase):
             os.environ["KART_UPLOAD_DIR"] = directory + "/uploads"
             main.service = PrintService(Database(directory + "/kart.db"))
             with TestClient(main.app) as client:
+                self.assertEqual(client.head("/health").status_code, 200)
                 def user(name):
                     r = client.post("/dev/users", json={"name": name, "campus_id": "campus-one"})
                     self.assertEqual(r.status_code, 201, r.text)

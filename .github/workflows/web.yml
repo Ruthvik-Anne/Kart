@@ -36,10 +36,10 @@ jobs:
           KART_SESSION_SECRET: ci-local-demo-secret-at-least-32-characters
           KART_BACKEND_URL: http://127.0.0.1:8000
           KART_DB_PATH: /tmp/kart-live-e2e.db
-          BASE_URL: http://localhost:3100
+          BASE_URL: http://127.0.0.1:3100
         run: |
           PYTHONPATH=../backend python -m uvicorn app.main:app --port 8000 &
           npx next start -p 3100 &
-          npx --yes wait-on --timeout 120000 http://localhost:8000/health http://localhost:3100/login
+          npx --yes wait-on --timeout 120000 http://127.0.0.1:8000/health http://127.0.0.1:3100/login
           npm run test:e2e
           node e2e/live.mjs

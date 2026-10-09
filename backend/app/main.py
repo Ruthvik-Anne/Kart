@@ -160,6 +160,11 @@ def health():
     return {"status": "ok"}
 
 
+@app.head("/health")
+def health_head():
+    return None
+
+
 @app.post("/dev/users", status_code=201, include_in_schema=False)
 def demo_user(data: DemoUser):
     if os.getenv("KART_DEMO_MODE") != "1":
