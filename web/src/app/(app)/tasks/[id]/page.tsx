@@ -70,11 +70,11 @@ export default function TaskDetail({ params }: { params: Promise<{ id: string }>
               <span className="ml-auto"><ScoreChip score={pr.score} label="Priority" parts={pr.parts} /></span>
             </div>
             <h1 className="mt-3 font-display text-2xl font-bold">{t.title}</h1>
-            <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[#4c6354]">{t.description}</p>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-x4c6354">{t.description}</p>
             <AttachmentList files={t.attachments} />
             <dl className="mt-4 grid gap-2 text-xs">
               {[['Budget', kc(t.budget)], t.startAt ? ['Starts no earlier than', when(t.startAt)] : null, t.recurrence ? ['Repeats', t.recurrence.every + ', occurrence ' + t.recurrence.index + ' of ' + t.recurrence.total] : null, t.orderRef ? ['Linked order', t.orderRef] : null, ['Deadline', `${when(t.deadline)} (${timeLeft(t.deadline)})`], ['Posted by', k.posterLabel(t, me)], t.assigneeId ? ['Assigned to', nameOf(t.assigneeId)] : null, held > 0 ? ['Held in escrow', kc(held)] : null]
-                .filter((r): r is string[] => !!r).map(([a, b]) => <div key={a} className="flex justify-between border-b border-[#edf1eb] pb-2"><dt className="text-muted">{a}</dt><dd className="font-bold">{b}</dd></div>)}
+                .filter((r): r is string[] => !!r).map(([a, b]) => <div key={a} className="flex justify-between border-b border-xedf1eb pb-2"><dt className="text-muted">{a}</dt><dd className="font-bold">{b}</dd></div>)}
             </dl>
           </Card>
 
@@ -84,7 +84,7 @@ export default function TaskDetail({ params }: { params: Promise<{ id: string }>
               <h2 className="mb-2 font-display text-base font-bold">Linked workflow · {flow.title}</h2>
               <ol className="grid gap-1.5 text-xs">
                 {flow.taskIds.map(id => k.task(id)).filter((x): x is NonNullable<typeof x> => !!x).map(x => (
-                  <li key={x.id} className="flex items-center gap-2"><span className="grid h-5 w-5 place-items-center rounded-full bg-[#eef1ed] text-[10px] font-extrabold">{x.step}</span>
+                  <li key={x.id} className="flex items-center gap-2"><span className="grid h-5 w-5 place-items-center rounded-full bg-xeef1ed text-[10px] font-extrabold">{x.step}</span>
                     {x.id === t.id ? <b>{x.title}</b> : <Link className="underline" href={'/tasks/' + x.id}>{x.title}</Link>}<span className="ml-auto"><Badge tone={STATUS_TONE[x.status]}>{statusLabel(x.status)}</Badge></span></li>
                 ))}
               </ol>
@@ -96,9 +96,9 @@ export default function TaskDetail({ params }: { params: Promise<{ id: string }>
             <h2 className="mb-3 font-display text-base font-bold">Milestones</h2>
             <Stepper steps={steps} />
             {t.milestones.filter(m => m.note || m.deliverables?.length).map(m => (
-              <div key={m.id} className="mt-3 rounded-xl bg-[#f6f9f4] p-3 text-xs"><b>Delivery for &ldquo;{m.title}&rdquo;</b>{m.note && <p className="mt-1">{m.note}</p>}<AttachmentList files={m.deliverables} /></div>
+              <div key={m.id} className="mt-3 rounded-xl bg-xf6f9f4 p-3 text-xs"><b>Delivery for &ldquo;{m.title}&rdquo;</b>{m.note && <p className="mt-1">{m.note}</p>}<AttachmentList files={m.deliverables} /></div>
             ))}
-            {scheduled && isAssignee && t.status === 'assigned' && <p className="mt-3 text-[11px] font-bold text-[#a66f1e]">Scheduled: you can start from {when(t.startAt!)}.</p>}
+            {scheduled && isAssignee && t.status === 'assigned' && <p className="mt-3 text-[11px] font-bold text-xa66f1e">Scheduled: you can start from {when(t.startAt!)}.</p>}
             <div className="mt-4 flex flex-wrap gap-2">
               {isAssignee && t.status === 'assigned' && <Button size="sm" disabled={scheduled} onClick={() => act(kart => kart.startWork(me, t.id), 'Work started')}>Start work</Button>}
               {isAssignee && t.status === 'in_progress' && <Button size="sm" onClick={() => setDialog('submit')}>Submit next milestone</Button>}
@@ -120,11 +120,11 @@ export default function TaskDetail({ params }: { params: Promise<{ id: string }>
           {t.status === 'completed' && (isPoster || isAssignee) && (
             <Card>
               <h2 className="mb-3 font-display text-base font-bold">Reviews</h2>
-              {theirReview && <div className="mb-3 rounded-xl bg-[#f6f9f4] p-3 text-xs"><b>{reviewTarget} rated you</b> <StarRating value={theirReview.rating} />{theirReview.comment && <p className="mt-1">{theirReview.comment}</p>}</div>}
+              {theirReview && <div className="mb-3 rounded-xl bg-xf6f9f4 p-3 text-xs"><b>{reviewTarget} rated you</b> <StarRating value={theirReview.rating} />{theirReview.comment && <p className="mt-1">{theirReview.comment}</p>}</div>}
               {myReview && <div className="rounded-xl bg-forest-100 p-3 text-xs"><b>Your review of {reviewTarget}</b> <StarRating value={myReview.rating} />{myReview.comment && <p className="mt-1">{myReview.comment}</p>}</div>}
               {mayReview && (
                 <form className="grid gap-3" onSubmit={async e => { e.preventDefault(); const r = await act(kart => kart.reviewTask(me, t.id, stars, review), 'Thanks for your review'); if (r.ok) setReview(''); }}>
-                  <div><div className="mb-1 text-[11px] font-extrabold text-[#55715b]">How was {reviewTarget}?</div><StarRating value={stars} onChange={setStars} /></div>
+                  <div><div className="mb-1 text-[11px] font-extrabold text-x55715b">How was {reviewTarget}?</div><StarRating value={stars} onChange={setStars} /></div>
                   <Field label="Comment (optional)"><textarea maxLength={300} className={inputCls + ' min-h-16'} value={review} onChange={e => setReview(e.target.value)} /></Field>
                   <div><Button type="submit" size="sm">Submit review</Button></div>
                 </form>
@@ -146,7 +146,7 @@ export default function TaskDetail({ params }: { params: Promise<{ id: string }>
                       <span className="text-muted">{profile ? `★ ${profile.rating.toFixed(1)} (${profile.ratingCount})` : 'New provider'}</span>
                       <span className="ml-auto"><ScoreChip score={m.score} label="Match" parts={m.parts} /></span>
                     </div>
-                    <p className="my-2 text-xs text-[#4c6354]">{b.note}</p>
+                    <p className="my-2 text-xs text-x4c6354">{b.note}</p>
                     <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                       <span><b>{kc(b.amount)}</b> · ETA {b.etaHours} h{b.providerId === me.id ? ` · you'd receive ${kc(net)}` : ''}</span>
                       {isPoster && open && <Button size="sm" disabled={!canAfford(b.amount) || locked} title={canAfford(b.amount) ? undefined : 'Top up your wallet to cover this bid'} onClick={() => { if (confirm(`Accept ${nameOf(b.providerId)}'s bid? ${kc(b.amount)} will be held in escrow.`)) act(kart => kart.acceptBid(me, t.id, b.id), 'Bid accepted. Payment is held in escrow'); }}>Accept & hold {kc(b.amount)}</Button>}
@@ -177,7 +177,7 @@ export default function TaskDetail({ params }: { params: Promise<{ id: string }>
                 <div role="tablist" aria-label="Bidders" className="mb-3 flex flex-wrap gap-1">
                   {threads.map(uid => (
                     <button key={uid} role="tab" aria-selected={currentBidder === uid} onClick={() => setActiveKey(`${t.id}:${uid}`)}
-                      className={`rounded-full px-3 py-1.5 text-[11px] font-bold ${currentBidder === uid ? 'bg-forest-800 text-white' : 'bg-[#eef1ed]'}`}>{nameOf(uid)}</button>
+                      className={`rounded-full px-3 py-1.5 text-[11px] font-bold ${currentBidder === uid ? 'bg-forest-800 text-white' : 'bg-xeef1ed'}`}>{nameOf(uid)}</button>
                   ))}
                 </div>
               )}

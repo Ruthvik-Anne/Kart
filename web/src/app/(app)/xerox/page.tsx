@@ -45,7 +45,7 @@ export default function Xerox() {
             <div className="grid gap-3">
               {jobs.map(o => (
                 <Card key={o.id} className="!p-4">
-                  <div className="flex items-start justify-between gap-2"><div><div className="text-[10px] font-extrabold uppercase tracking-wider text-[#5d8369]">{o.id} · {when(o.ts)}</div><div className="mt-1 text-xs font-bold">{o.title}</div><div className="text-[11px] text-muted">{k.store(o.storeId)?.name} · {kc(o.amount)}</div><AttachmentList files={o.files} /></div><Badge tone={o.status === 'Cancelled' ? 'red' : o.status === 'Ready' ? 'amber' : 'green'}>{o.status}</Badge></div>
+                  <div className="flex items-start justify-between gap-2"><div><div className="text-[10px] font-extrabold uppercase tracking-wider text-x5d8369">{o.id} · {when(o.ts)}</div><div className="mt-1 text-xs font-bold">{o.title}</div><div className="text-[11px] text-muted">{k.store(o.storeId)?.name} · {kc(o.amount)}</div><AttachmentList files={o.files} /></div><Badge tone={o.status === 'Cancelled' ? 'red' : o.status === 'Ready' ? 'amber' : 'green'}>{o.status}</Badge></div>
                 </Card>
               ))}
             </div>

@@ -52,6 +52,13 @@ describe('dynamic navigation', () => {
     expect(l).not.toContain('Provider Hub');
     expect(l).not.toContain('Ledger explorer');
   });
+  it('guards product pages without listing them in the sidebar', () => {
+    expect(labels(student)).not.toContain('Product');
+    expect(labels(student)).toContain('Wishlist');
+    expect(canVisit(student, '/product/f1')).toBe(true);
+    expect(canVisit(canteen, '/product/f1')).toBe(false);
+    expect(canVisit(platformAdmin, '/wishlist')).toBe(false);
+  });
   it('adds Provider Hub for providers', () => expect(labels(provider)).toContain('Provider Hub'));
   it('shows canteens a menu and queue, but no print queue', () => {
     const l = labels(canteen);

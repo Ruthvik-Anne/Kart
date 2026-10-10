@@ -30,7 +30,7 @@ export function VendorOrders({ print }: { print?: boolean }) {
             <Card key={o.id} data-order-card={o.id} className="!p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#5d8369]">{o.id} · {when(o.ts)} · {k.user(o.buyerId)?.name}</div>
+                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-x5d8369">{o.id} · {when(o.ts)} · {k.user(o.buyerId)?.name}</div>
                   <h3 className="mt-1 text-sm font-bold">{o.title}</h3>
                   <div className="text-[11px] text-muted">{kc(o.amount)} paid from wallet{o.window ? ` · ${o.fulfillment === 'delivery' ? 'delivery' : 'pickup'} ${o.window}` : ''}</div>
                   {o.deliveryDetails && <div className="mt-1 text-[11px] font-bold text-forest-800">Delivery: {o.deliveryDetails}</div>}

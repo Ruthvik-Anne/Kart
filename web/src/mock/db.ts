@@ -5,7 +5,8 @@ import { Ledger, ACCOUNTS as A, LedgerError, type JournalEntry } from '@/ledger/
 import * as rules from '@/ledger/rules';
 import { DEFAULT_FEES, type Fees } from '@/ledger/rules';
 import { appendBlock, type Block } from '@/chain/chain';
-import { cleanAttachments, MAX_FILES, type Attachment, type FileLike } from '@/lib/attachments';
+import { promoDiscount, splitDiscount, normalizeCode, validatePromoDef, type Promo } from '@/lib/promo';
+import { cleanAttachments, type Attachment, type FileLike } from '@/lib/attachments';
 import { next, milestoneRule, type TaskEvent, type TaskStatus } from '@/domain/taskMachine';
 import {
   DEFAULT_MATCH_WEIGHTS, DEFAULT_PRIORITY_WEIGHTS, matchScore, priorityScore,
@@ -15,30 +16,15 @@ import {
 export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 const fail = (error: string): { ok: false; error: string } => ({ ok: false, error });
 const HOUR = 3_600_000;
-/** 8-character handover code shown as text and inside the QR pass. */
-const newCode = () => crypto.randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase();
 
 export interface Store { id: string; name: string; type: StoreType; vendorId: string; open: boolean }
-export interface Product { id: string; storeId: string; name: string; price: number; icon: string; desc: string; stock: number; category: 'food' | 'shop' }
+export interface Product { id: string; storeId: string; name: string; price: number; icon: string; desc: string; stock: number; category: 'food' | 'shop'; mrp?: number }
 export interface CartLine { productId: string; qty: number }
-export type OrderStatus = 'Placed' | 'Preparing' | 'Ready' | 'Out for delivery' | 'Collected' | 'Cancelled';
+export type OrderStatus = 'Placed' | 'Preparing' | 'Ready' | 'Collected' | 'Cancelled';
 export interface Order {
   id: string; buyerId: string; storeId: string; kind: 'food' | 'shop' | 'print'; title: string;
   amount: number; status: OrderStatus; ts: number; window?: string; files?: Attachment[];
-  fulfillment?: 'pickup' | 'delivery'; deliveryDetails?: string; handoverCode?: string;
-  paymentMethod?: 'wallet' | 'pay_on_handover'; items?: CartLine[]; runnerId?: string;
-}
-
-export type PaperSize = 'A4' | 'A3' | 'Legal' | 'Letter';
-export type Binding = 'none' | 'spiral' | 'staple' | 'comb';
-export type Lamination = 'none' | 'normal' | 'id';
-export const PAPER_RATES: Record<PaperSize, number> = { A4: 1, Letter: 1.25, Legal: 1.25, A3: 1.75 };
-export const BINDING_COST: Record<Binding, number> = { none: 0, staple: 5, comb: 25, spiral: 30 };
-export const LAMINATION_COST: Record<Lamination, number> = { none: 0, normal: 15, id: 25 };
-export interface PrintSpec {
-  doc: string; pages: number; copies: number; color: boolean; duplex: boolean; spiral: boolean;
-  file?: FileLike; files?: FileLike[]; paper?: PaperSize; binding?: Binding; lamination?: Lamination;
-  notes?: string; window?: string; fulfillment?: 'pickup' | 'delivery'; deliveryDetails?: string;
+  productIds?: string[]; discount?: number; promoCode?: string;
 }
 export interface Milestone {
   id: string; title: string; share: number; amount: number; status: 'pending' | 'submitted' | 'released';
@@ -63,7 +49,7 @@ export interface Message {
   attachments?: Attachment[]; quote?: Quote;
 }
 export interface Review {
-  id: string; kind: 'task' | 'order'; refId: string; fromId: string; toId: string; as: 'provider' | 'poster' | 'store';
+  id: string; kind: 'task' | 'order' | 'product'; refId: string; fromId: string; toId: string; as: 'provider' | 'poster' | 'store';
   storeId?: string; rating: number; comment: string; ts: number;
 }
 export interface TaskDraft {
@@ -91,7 +77,13 @@ export interface CampusEvent {
 export interface Ticket { id: string; eventId: string; userId: string; ts: number; code: string }
 export interface VendorApp { id: string; name: string; type: StoreType; ownerName: string; status: 'pending' | 'approved' | 'rejected' }
 
+export interface PromoUse { code: string; userId: string; orderId: string }
+export interface WishItem { userId: string; productId: string; ts: number }
+
 export interface Db {
+  promos: Promo[];
+  promoUses: PromoUse[];
+  wishlist: WishItem[];
   reviews: Review[];
   workflows: Workflow[];
   listings: Listing[];
@@ -153,7 +145,30 @@ export class Kart {
   }
 
   // ---------- commerce ----------
-  checkout(actor: User, lines: CartLine[], window: string): Result<{ orderIds: string[] }> {
+  /** Which promo (if any) applies to these lines for this user, and what it takes off. */
+  private resolvePromo(actor: User, code: string | undefined, subtotal: number): { error: string } | { promo?: Promo; discount: number } {
+    if (!code || !code.trim()) return { discount: 0 };
+    const promo = this.db.promos.find(x => x.code === normalizeCode(code));
+    if (!promo || !promo.active) return { error: 'That code is not valid.' };
+    if (this.db.promoUses.some(u => u.code === promo.code && u.userId === actor.id)) return { error: 'You have already used that code.' };
+    if (promo.maxUses !== undefined && this.db.promoUses.filter(u => u.code === promo.code).length >= promo.maxUses) return { error: 'That code has been fully redeemed.' };
+    if (subtotal < promo.min) return { error: 'Add ' + (promo.min - subtotal) + ' KC more to use ' + promo.code + '.' };
+    return { promo, discount: promoDiscount(promo, subtotal) };
+  }
+
+  private cartSubtotal(lines: CartLine[]): number {
+    return lines.reduce((a, l) => a + (this.db.products.find(p => p.id === l.productId)?.price ?? 0) * (Number.isInteger(l.qty) ? l.qty : 0), 0);
+  }
+
+  previewPromo(actor: User, lines: CartLine[], code: string): Result<{ discount: number; label: string; code: string }> {
+    const subtotal = this.cartSubtotal(lines);
+    const r = this.resolvePromo(actor, code, subtotal);
+    if ('error' in r) return fail(r.error);
+    if (!r.promo) return fail('Enter a code.');
+    return { ok: true, discount: r.discount, label: r.promo.label, code: r.promo.code };
+  }
+
+  checkout(actor: User, lines: CartLine[], window: string, promoCode?: string): Result<{ orderIds: string[]; discount: number }> {
     if (!can(actor, 'order:create')) return fail('Not allowed.');
     if (!lines.length) return fail('Your cart is empty.');
     const byStore = new Map<string, { product: Product; qty: number }[]>();
@@ -165,141 +180,49 @@ export class Kart {
       byStore.set(product.storeId, [...(byStore.get(product.storeId) ?? []), { product, qty: l.qty }]);
     }
     const total = [...byStore.values()].flat().reduce((a, l) => a + l.product.price * l.qty, 0);
-    if (this.balance(actor.id) < total) return fail('Not enough KC. Top up your wallet first.');
+    const pr = this.resolvePromo(actor, promoCode, total);
+    if ('error' in pr) return fail(pr.error);
+    if (this.balance(actor.id) < total - pr.discount) return fail('Not enough KC. Top up your wallet first.');
+    const stores = [...byStore.entries()];
+    const shares = splitDiscount(pr.discount, stores.map(([, items]) => items.reduce((a, l) => a + l.product.price * l.qty, 0)));
     const orderIds: string[] = [];
-    for (const [storeId, items] of byStore) {
+    for (const [n, [storeId, items]] of stores.entries()) {
       const store = this.store(storeId)!;
       const amount = items.reduce((a, l) => a + l.product.price * l.qty, 0);
+      const discount = shares[n];
       const id = this.id('KRT');
-      const err = this.post(rules.checkout(id, actor.id, store.vendorId, amount, this.db.fees));
+      const err = this.post(rules.checkout(id, actor.id, store.vendorId, amount, this.db.fees, discount));
       if (err) return fail(err);
       items.forEach(l => { l.product.stock -= l.qty; });
+      if (pr.promo && discount > 0) this.db.promoUses.push({ code: pr.promo.code, userId: actor.id, orderId: id });
       this.db.orders.unshift({
         id, buyerId: actor.id, storeId, kind: items[0].product.category, amount, status: 'Placed', ts: Date.now(), window,
+        productIds: items.map(l => l.product.id), discount: discount || undefined, promoCode: discount && pr.promo ? pr.promo.code : undefined,
         title: items.map(l => `${l.product.name}${l.qty > 1 ? ` × ${l.qty}` : ''}`).join(', '),
       });
       this.notify(store.vendorId, `New order ${id} · ${amount} KC`, '/vendor/queue');
       orderIds.push(id);
     }
-    return { ok: true, orderIds };
+    return { ok: true, orderIds, discount: pr.discount };
   }
 
-  /** Reserves stock and takes payment from the customer's KC wallet. The handover code proves collection. */
-  placeOrder(actor: User, lines: CartLine[], window: string, fulfillment: 'pickup' | 'delivery', deliveryDetails = ''): Result<{ orderIds: string[]; codes: string[] }> {
-    if (!can(actor, 'order:create')) return fail('Not allowed.');
-    if (!Array.isArray(lines) || lines.length === 0 || lines.length > 30) return fail('Choose at least one item.');
-    if (!['pickup', 'delivery'].includes(fulfillment)) return fail('Choose pickup or delivery.');
-    if (fulfillment === 'delivery' && (!deliveryDetails.trim() || deliveryDetails.length > 200)) return fail('Enter delivery instructions (up to 200 characters).');
-    if (!window || window.length > 80) return fail('Choose a pickup or delivery time.');
-    const byStore = new Map<string, { product: Product; qty: number }[]>();
-    const quantities = new Map<string, number>();
-    for (const line of lines) {
-      if (!line || !Number.isInteger(line.qty) || line.qty < 1 || line.qty > 50) return fail('Invalid item quantity.');
-      quantities.set(line.productId, (quantities.get(line.productId) ?? 0) + line.qty);
-    }
-    for (const [productId, qty] of quantities) {
-      const product = this.db.products.find(p => p.id === productId);
-      if (!product || product.stock < qty) return fail('An item is unavailable in the requested quantity.');
-      const store = this.store(product.storeId);
-      if (!store?.open) return fail('A selected store is closed.');
-      byStore.set(product.storeId, [...(byStore.get(product.storeId) ?? []), { product, qty }]);
-    }
-    const orderIds: string[] = [];
-    const codes: string[] = [];
-    const total = [...byStore.values()].flat().reduce((sum, item) => sum + item.product.price * item.qty, 0);
-    if (this.balance(actor.id) < total) return fail('Not enough KC in your wallet for this cart. Top up your wallet first.');
-    for (const [storeId, items] of byStore) {
-      const store = this.store(storeId)!;
-      const amount = items.reduce((sum, item) => sum + item.product.price * item.qty, 0);
-      const id = this.id('KRT');
-      const handoverCode = newCode();
-      const err = this.post(rules.checkout(id, actor.id, store.vendorId, amount, this.db.fees));
-      if (err) return fail(err);
-      items.forEach(item => { item.product.stock -= item.qty; });
-      this.db.orders.unshift({
-        id, buyerId: actor.id, storeId, kind: items[0].product.category, amount,
-        status: 'Placed', ts: Date.now(), window, fulfillment, deliveryDetails: fulfillment === 'delivery' ? deliveryDetails.trim() : undefined,
-        paymentMethod: 'wallet', handoverCode,
-        items: items.map(item => ({ productId: item.product.id, qty: item.qty })),
-        title: items.map(item => `${item.product.name}${item.qty > 1 ? ` × ${item.qty}` : ''}`).join(', '),
-      });
-      this.notify(store.vendorId, `New order ${id} · ${amount} KC`, '/vendor/queue');
-      orderIds.push(id);
-      codes.push(handoverCode);
-    }
-    return { ok: true, orderIds, codes };
-  }
-
-  verifyHandover(actor: User, orderId: string, code: string): Result {
-    const order = this.db.orders.find(o => o.id === orderId);
-    if (!order || !can(actor, 'store:orders:update', { storeId: order.storeId })) return fail('Order not found.');
-    if (order.status !== 'Ready') return fail('Mark the order ready before handover.');
-    if (!order.handoverCode || code.trim().toUpperCase() !== order.handoverCode) return fail('The handover code does not match.');
-    order.status = 'Collected';
-    this.notify(order.buyerId, `Order ${order.id} was handed over`, '/orders');
-    return { ok: true };
-  }
-
-  printRequest(actor: User, storeId: string, p: PrintSpec): Result<{ orderId: string; code: string }> {
+  printRequest(actor: User, storeId: string, p: { doc: string; pages: number; copies: number; color: boolean; duplex: boolean; spiral: boolean; file?: FileLike }): Result<{ orderId: string }> {
     if (!can(actor, 'print:create')) return fail('Not allowed.');
     const store = this.store(storeId);
     if (!store || store.type !== 'xerox' || !store.open) return fail('Choose an open print shop.');
-    const picked = [...(p.files ?? []), ...(p.file ? [p.file] : [])];
-    const att = cleanAttachments(picked);
+    const att = cleanAttachments(p.file ? [p.file] : []);
     if (!att.ok) return fail(att.error);
     const doc = p.doc.trim();
     if (!doc || doc.length > 80) return fail('Enter a document name (up to 80 characters).');
     if (![p.pages, p.copies].every(Number.isInteger) || p.pages < 1 || p.pages > 500 || p.copies < 1 || p.copies > 20) return fail('Pages 1-500, copies 1-20.');
-    const paper: PaperSize = p.paper ?? 'A4';
-    const binding: Binding = p.binding ?? (p.spiral ? 'spiral' : 'none');
-    const lamination: Lamination = p.lamination ?? 'none';
-    if (!(paper in PAPER_RATES)) return fail('Choose A4, A3, Legal or Letter paper.');
-    if (!(binding in BINDING_COST)) return fail('Choose a binding option.');
-    if (!(lamination in LAMINATION_COST)) return fail('Choose a lamination option.');
-    const fulfillment = p.fulfillment ?? 'pickup';
-    if (!['pickup', 'delivery'].includes(fulfillment)) return fail('Choose pickup or delivery.');
-    if (fulfillment === 'delivery' && (!p.deliveryDetails?.trim() || p.deliveryDetails.length > 200)) return fail('Enter delivery instructions (up to 200 characters).');
-    if (p.window && p.window.length > 80) return fail('Choose a pickup or delivery time.');
-    const notes = (p.notes ?? '').trim();
-    if (notes.length > 300) return fail('Keep the print notes under 300 characters.');
-    const sheets = p.duplex ? Math.ceil(p.pages / 2) : p.pages;
-    const amount = Math.round(sheets * p.copies * (p.color ? 8 : 2) * PAPER_RATES[paper]) + BINDING_COST[binding] + LAMINATION_COST[lamination];
-    if (this.balance(actor.id) < amount) return fail('Not enough KC in your wallet for this print job. Top up your wallet first.');
-    const id = this.id('PRT');
-    const handoverCode = newCode();
-    const paid = this.post(rules.checkout(id, actor.id, store.vendorId, amount, this.db.fees));
-    if (paid) return fail(paid);
-    const spec = [`${p.pages}p × ${p.copies}`, paper, p.color ? 'colour' : 'B&W', p.duplex ? 'duplex' : 'single-sided', binding !== 'none' ? binding : null, lamination !== 'none' ? `${lamination} lamination` : null].filter(Boolean).join(', ');
-    this.db.orders.unshift({
-      id, buyerId: actor.id, storeId, kind: 'print', amount, status: 'Placed', ts: Date.now(),
-      files: att.files.map(f => ({ ...f, id: this.id('F') })),
-      window: p.window, fulfillment, deliveryDetails: fulfillment === 'delivery' ? p.deliveryDetails?.trim() : undefined,
-      paymentMethod: 'wallet', handoverCode,
-      title: `Print: ${doc} (${spec})${notes ? ` · ${notes}` : ''}`,
-    });
-    this.notify(store.vendorId, `New print job ${id}`, '/vendor/print-queue');
-    return { ok: true, orderId: id, code: handoverCode };
-  }
-
-  placePrintOrder(actor: User, storeId: string, p: { doc: string; pages: number; copies: number; color: boolean; duplex: boolean; spiral: boolean; fulfillment: 'pickup' | 'delivery'; deliveryDetails?: string }, files: Attachment[]): Result<{ orderId: string }> {
-    if (!can(actor, 'print:create')) return fail('Not allowed.');
-    const store = this.store(storeId);
-    if (!store || store.type !== 'xerox' || !store.open) return fail('Choose an open print shop.');
-    if (!p.doc?.trim() || p.doc.length > 80) return fail('Enter a document name (up to 80 characters).');
-    if (![p.pages, p.copies].every(Number.isInteger) || p.pages < 1 || p.pages > 500 || p.copies < 1 || p.copies > 20) return fail('Pages 1–500, copies 1–20.');
-    if (p.fulfillment === 'delivery' && (!p.deliveryDetails?.trim() || p.deliveryDetails.length > 200)) return fail('Enter delivery instructions.');
-    if (!files.length || files.length > MAX_FILES) return fail('Attach at least one document.');
     const sheets = p.duplex ? Math.ceil(p.pages / 2) : p.pages;
     const amount = sheets * p.copies * (p.color ? 8 : 2) + (p.spiral ? 30 : 0);
-    if (this.balance(actor.id) < amount) return fail('Not enough KC in your wallet for this print job. Top up your wallet first.');
     const id = this.id('PRT');
-    const handoverCode = newCode();
-    const paid = this.post(rules.checkout(id, actor.id, store.vendorId, amount, this.db.fees));
-    if (paid) return fail(paid);
+    const err = this.post(rules.checkout(id, actor.id, store.vendorId, amount, this.db.fees));
+    if (err) return fail(err);
     this.db.orders.unshift({ id, buyerId: actor.id, storeId, kind: 'print', amount, status: 'Placed', ts: Date.now(),
-      files, fulfillment: p.fulfillment, deliveryDetails: p.fulfillment === 'delivery' ? p.deliveryDetails?.trim() : undefined,
-      paymentMethod: 'wallet', handoverCode,
-      title: `Print: ${p.doc.trim()} (${p.pages} pages × ${p.copies} copies${p.color ? ', colour' : ''}${p.duplex ? ', duplex' : ''}${p.spiral ? ', spiral' : ''})` });
+      files: att.files.map(f => ({ ...f, id: this.id('F') })),
+      title: `Print: ${doc} (${p.pages}p × ${p.copies}${p.color ? ', colour' : ''}${p.duplex ? ', duplex' : ''}${p.spiral ? ', spiral' : ''})` });
     this.notify(store.vendorId, `New print job ${id}`, '/vendor/print-queue');
     return { ok: true, orderId: id };
   }
@@ -308,60 +231,11 @@ export class Kart {
     const o = this.db.orders.find(x => x.id === orderId);
     if (!o) return fail('Order not found.');
     if (!can(actor, 'store:orders:update', { storeId: o.storeId })) return fail('This order belongs to another store.');
-    if (o.status === 'Out for delivery') return fail('The delivery runner completes this order with the customer code.');
     const flow: OrderStatus[] = ['Placed', 'Preparing', 'Ready', 'Collected'];
     const i = flow.indexOf(o.status);
-    if (i < 0 || i === flow.length - 1 || (o.handoverCode && o.status === 'Ready')) {
-      if (o.status === 'Ready' && o.fulfillment === 'delivery') return fail('Waiting for a delivery runner to accept this job.');
-      return fail('Verify the handover code to complete this order.');
-    }
+    if (i < 0 || i === flow.length - 1) return fail('Order cannot advance.');
     o.status = flow[i + 1];
     this.notify(o.buyerId, `Order ${o.id} is now ${o.status.toLowerCase()}`, '/orders');
-    if (o.status === 'Ready' && o.fulfillment === 'delivery') this.notify(o.buyerId, `Order ${o.id} is ready. A delivery runner will bring it to you.`, '/orders');
-    return { ok: true };
-  }
-
-  // ---------- campus delivery ----------
-  /** A student accepts a delivery job: the shop is told who is collecting, the customer is told a runner is on the way. */
-  acceptDelivery(actor: User, orderId: string): Result {
-    if (!can(actor, 'order:deliver')) return fail('Not allowed.');
-    const o = this.db.orders.find(x => x.id === orderId);
-    if (!o) return fail('Order not found.');
-    if (o.fulfillment !== 'delivery') return fail('This order is for pickup from the shop.');
-    if (o.status !== 'Ready') return fail('The shop has not marked this order ready yet.');
-    if (o.runnerId === actor.id) return fail('You have already taken this job.');
-    if (o.runnerId) return fail('Another runner took this job a moment ago.');
-    if (o.buyerId === actor.id) return fail('You cannot deliver your own order.');
-    o.runnerId = actor.id;
-    this.notify(o.buyerId, `${actor.name} is collecting order ${o.id} for delivery`, '/orders');
-    this.notify(this.store(o.storeId)!.vendorId, `${actor.name} will collect order ${o.id}`, '/vendor/queue');
-    return { ok: true };
-  }
-
-  /** The shop hands a ready delivery order to the runner who accepted it. */
-  handoverToRunner(actor: User, orderId: string): Result {
-    const o = this.db.orders.find(x => x.id === orderId);
-    if (!o) return fail('Order not found.');
-    if (!can(actor, 'store:orders:update', { storeId: o.storeId })) return fail('This order belongs to another store.');
-    if (o.status !== 'Ready') return fail('Mark the order ready before handing it over.');
-    if (o.fulfillment !== 'delivery' || !o.runnerId) return fail('Waiting for the customer to collect, or for a runner to accept this job.');
-    o.status = 'Out for delivery';
-    this.notify(o.runnerId, `Collect order ${o.id} from ${this.store(o.storeId)!.name}`, '/delivery');
-    this.notify(o.buyerId, `Order ${o.id} is on its way to you`, '/orders');
-    return { ok: true };
-  }
-
-  /** The runner reads the customer's code at the door; the code is the proof of delivery. */
-  deliverOrder(actor: User, orderId: string, code: string): Result {
-    if (!can(actor, 'order:deliver')) return fail('Not allowed.');
-    const o = this.db.orders.find(x => x.id === orderId);
-    if (!o) return fail('Order not found.');
-    if (o.runnerId !== actor.id) return fail('Accept this delivery job first.');
-    if (o.status !== 'Out for delivery') return fail('Collect the order from the shop before marking it delivered.');
-    if (!o.handoverCode || String(code ?? '').trim().toUpperCase() !== o.handoverCode) return fail('That code does not match. Ask the customer for the code on their order.');
-    o.status = 'Collected';
-    this.notify(o.buyerId, `Order ${o.id} was delivered. Thank you!`, '/orders');
-    this.notify(this.store(o.storeId)!.vendorId, `Order ${o.id} delivered by ${actor.name}`, '/vendor/queue');
     return { ok: true };
   }
 
@@ -369,16 +243,11 @@ export class Kart {
     const o = this.db.orders.find(x => x.id === orderId);
     if (!o || !can(actor, 'order:view:own', { ownerId: o.buyerId })) return fail('Order not found.');
     if (o.status !== 'Placed') return fail('Only orders that have not started can be cancelled.');
-    for (const item of o.items ?? []) {
-      const product = this.db.products.find(p => p.id === item.productId);
-      if (product) product.stock += item.qty;
-    }
-    if (o.paymentMethod !== 'pay_on_handover') {
-      const store = this.store(o.storeId)!;
-      const err = this.post(rules.orderRefund(o.id, o.buyerId, store.vendorId, o.amount, this.db.fees));
-      if (err) return fail(err);
-    }
+    const store = this.store(o.storeId)!;
+    const err = this.post(rules.orderRefund(o.id, o.buyerId, store.vendorId, o.amount, this.db.fees, o.discount ?? 0));
+    if (err) return fail(err);
     o.status = 'Cancelled';
+    this.db.promoUses = this.db.promoUses.filter(u => u.orderId !== o.id);
     return { ok: true };
   }
 
@@ -914,6 +783,68 @@ export class Kart {
     return { ok: true };
   }
 
+  // ---------- promo codes (platform-funded) ----------
+  savePromo(actor: User, p: Promo): Result {
+    if (!can(actor, 'fees:edit')) return fail('Not allowed.');
+    const promo: Promo = { ...p, code: normalizeCode(p.code), label: p.label.trim() };
+    const err = validatePromoDef(promo);
+    if (err) return fail(err);
+    const i = this.db.promos.findIndex(x => x.code === promo.code);
+    if (i >= 0) this.db.promos[i] = promo; else this.db.promos.push(promo);
+    this.audit(actor.id, 'Saved promo code ' + promo.code + '.');
+    return { ok: true };
+  }
+
+  togglePromo(actor: User, code: string): Result {
+    if (!can(actor, 'fees:edit')) return fail('Not allowed.');
+    const promo = this.db.promos.find(x => x.code === code);
+    if (!promo) return fail('Code not found.');
+    promo.active = !promo.active;
+    this.audit(actor.id, (promo.active ? 'Enabled' : 'Disabled') + ' promo code ' + code + '.');
+    return { ok: true };
+  }
+
+  promoUsage(code: string) { return this.db.promoUses.filter(u => u.code === code).length; }
+
+  // ---------- wishlist ----------
+  wishlistFor(userId: string) { return this.db.wishlist.filter(w => w.userId === userId); }
+  isWished(userId: string, productId: string) { return this.db.wishlist.some(w => w.userId === userId && w.productId === productId); }
+
+  toggleWishlist(actor: User, productId: string): Result<{ saved: boolean }> {
+    if (!can(actor, 'order:create')) return fail('Not allowed.');
+    if (!this.db.products.some(p => p.id === productId)) return fail('Product not found.');
+    const i = this.db.wishlist.findIndex(w => w.userId === actor.id && w.productId === productId);
+    if (i >= 0) { this.db.wishlist.splice(i, 1); return { ok: true, saved: false }; }
+    if (this.wishlistFor(actor.id).length >= 50) return fail('Your wishlist is full (50 items).');
+    this.db.wishlist.unshift({ userId: actor.id, productId, ts: Date.now() });
+    return { ok: true, saved: true };
+  }
+
+  // ---------- product reviews (verified buyers only) ----------
+  hasBought(userId: string, productId: string) {
+    return this.db.orders.some(o => o.buyerId === userId && o.status === 'Collected' && o.productIds?.includes(productId));
+  }
+
+  productReviews(productId: string) { return this.db.reviews.filter(r => r.kind === 'product' && r.refId === productId); }
+
+  productRating(productId: string) {
+    const rs = this.productReviews(productId);
+    return { count: rs.length, average: rs.length ? Math.round((rs.reduce((a, r) => a + r.rating, 0) / rs.length) * 10) / 10 : 0 };
+  }
+
+  reviewProduct(actor: User, productId: string, rating: number, comment: string): Result {
+    const p = this.db.products.find(x => x.id === productId);
+    if (!p) return fail('Product not found.');
+    if (!this.hasBought(actor.id, productId)) return fail('You can review a product after you have collected it.');
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) return fail('Choose a rating from 1 to 5 stars.');
+    const text = comment.trim();
+    if (text.length > 300) return fail('Keep the review under 300 characters.');
+    const existing = this.db.reviews.find(r => r.kind === 'product' && r.refId === productId && r.fromId === actor.id);
+    if (existing) { Object.assign(existing, { rating, comment: text, ts: Date.now() }); return { ok: true }; }
+    this.db.reviews.unshift({ id: this.id('R'), kind: 'product', refId: productId, fromId: actor.id, toId: this.store(p.storeId)!.vendorId, as: 'store', rating, comment: text, ts: Date.now() });
+    return { ok: true };
+  }
+
   // ---------- reviews & reputation ----------
   /** Reviews a user may still write for a finished task: poster rates the provider, provider rates the poster. */
   reviewableTasks(userId: string): { task: Task; target: string; as: 'provider' | 'poster' }[] {
@@ -1162,7 +1093,7 @@ export function seed(now = Date.now()): Db {
   const pr = (id: string, storeId: string, name: string, price: number, icon: string, desc: string, category: 'food' | 'shop', stock = 40): Product =>
     ({ id, storeId, name, price, icon, desc, stock, category });
   const products: Product[] = [
-    pr('f1', 'st-bites', 'Masala Dosa Combo', 85, '🥘', 'Crisp dosa, chutney and filter coffee', 'food'),
+    { ...pr('f1', 'st-bites', 'Masala Dosa Combo', 85, '🥘', 'Crisp dosa, chutney and filter coffee', 'food'), mrp: 110 },
     pr('f3', 'st-bites', 'Cold Coffee', 65, '🥤', 'Made to order, ready in 10 minutes', 'food'),
     pr('f2', 'st-green', 'Paneer Rice Bowl', 120, '🍛', 'A filling lunch between classes', 'food'),
     pr('f4', 'st-green', 'Veg Sandwich', 60, '🥪', 'Grilled with mint chutney', 'food'),
@@ -1209,6 +1140,11 @@ export function seed(now = Date.now()): Db {
   ];
   const vendorApps: VendorApp[] = [{ id: 'VA-1', name: 'Night Owl Café', ownerName: 'Karan T.', type: 'canteen', status: 'pending' }];
   const db: Db = {
+    promos: [
+      { code: 'KART10', kind: 'percent', value: 10, cap: 200, min: 150, label: '10% off, up to 200 KC', active: true },
+      { code: 'NEW50', kind: 'flat', value: 50, min: 300, label: '50 KC off orders over 300 KC', active: true, maxUses: 100 },
+      { code: 'LATE', kind: 'percent', value: 15, cap: 120, min: 90, label: '15% off orders over 90 KC', active: false },
+    ], promoUses: [], wishlist: [],
     reviews: [], workflows: [], listings, events, tickets: [], vendorApps,
     users, stores, products, orders: [], tasks, messages: [], profiles, services, notifications: [], audit: [],
     verifications: [{ id: 'VR-1', userId: 'u-meera', kind: 'provider', status: 'pending' }],
@@ -1219,15 +1155,4 @@ export function seed(now = Date.now()): Db {
   for (const id of ['u-alex', 'u-riya', 'u-nikhil', 'u-meera']) k.topUp(users.find(u => u.id === id)!, 2500);
   // Demo balances are simulated; no real money is involved until the PPI partner is connected.
   return k.db;
-}
-
-/** Empty campus data for a new installation. The demo seed is never used in live state. */
-export function emptyState(): Db {
-  return {
-    reviews: [], workflows: [], listings: [], events: [], tickets: [], vendorApps: [],
-    users: [], stores: [], products: [], orders: [], tasks: [], messages: [], profiles: [],
-    services: [], notifications: [], audit: [], verifications: [], entries: [], chain: [],
-    fees: { ...DEFAULT_FEES }, priorityWeights: { ...DEFAULT_PRIORITY_WEIGHTS },
-    matchWeights: { ...DEFAULT_MATCH_WEIGHTS }, seq: 0,
-  };
 }

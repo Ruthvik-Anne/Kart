@@ -22,7 +22,7 @@ export function FilePicker({ files, onChange, max = MAX_FILES, label = 'Attach f
       {files.length > 0 && (
         <ul className="grid gap-1" aria-label="Selected files">
           {files.map((f, i) => (
-            <li key={`${f.name}-${i}`} className="flex items-center justify-between rounded-lg bg-[#f3f7f1] px-3 py-1.5 text-[11px]">
+            <li key={`${f.name}-${i}`} className="flex items-center justify-between rounded-lg bg-xf3f7f1 px-3 py-1.5 text-[11px]">
               <span className="truncate font-bold">{f.name} <span className="font-normal text-muted">{formatSize(f.size)}</span></span>
               <button type="button" aria-label={`Remove ${f.name}`} className="ml-2 font-extrabold text-red-700" onClick={() => onChange(files.filter((_, j) => j !== i))}>×</button>
             </li>
@@ -38,7 +38,7 @@ export function AttachmentList({ files }: { files?: Attachment[] }) {
   return (
     <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Attachments">
       {files.map(f => (
-        <li key={f.id} className="inline-flex items-center gap-1 rounded-lg border border-line bg-white px-2 py-1 text-[10px] font-bold">📎 {f.name} <span className="font-normal text-muted">{formatSize(f.size)}</span></li>
+        <li key={f.id} className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-2 py-1 text-[10px] font-bold">📎 {f.name} <span className="font-normal text-muted">{formatSize(f.size)}</span></li>
       ))}
     </ul>
   );

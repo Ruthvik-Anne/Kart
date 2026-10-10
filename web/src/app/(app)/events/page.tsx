@@ -26,10 +26,10 @@ export default function Events() {
           {approved.map(e => {
             const left = k.seatsLeft(e), has = tickets.some(t => t.eventId === e.id), mine = e.hostId === me.id;
             return (
-              <article key={e.id} className="overflow-hidden rounded-2xl border border-line bg-white">
-                <div className="grid h-24 place-items-center bg-gradient-to-br from-[#e9f1e7] to-[#f8f4e9] text-5xl" aria-hidden>{e.icon}</div>
+              <article key={e.id} className="overflow-hidden rounded-2xl border border-line bg-surface">
+                <div className="grid h-24 place-items-center bg-gradient-to-br from-xe9f1e7 to-xf8f4e9 text-5xl" aria-hidden>{e.icon}</div>
                 <div className="p-4">
-                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#5d8369]">{k.user(e.hostId)?.name} · {when(e.date)}</div>
+                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-x5d8369">{k.user(e.hostId)?.name} · {when(e.date)}</div>
                   <h3 className="mt-1.5 font-display text-base font-bold">{e.name}</h3>
                   <p className="min-h-8 text-[11px] text-muted">{e.desc}</p>
                   <div className="mt-1 text-[11px] text-muted">📍 {e.place} · {left > 0 ? `${left} seats left` : 'Full'}</div>
@@ -46,7 +46,7 @@ export default function Events() {
       {tab === 'tickets' && (tickets.length === 0 ? <Empty title="No tickets yet">Register for an event to see it here.</Empty> : (
         <CardGrid>{tickets.map(t => {
           const e = k.db.events.find(x => x.id === t.eventId);
-          return <Card key={t.id}><div className="text-3xl" aria-hidden>{e?.icon}</div><h3 className="mt-2 font-display text-base font-bold">{e?.name}</h3><p className="text-[11px] text-muted">{e && when(e.date)} · {e?.place}</p><code className="mt-3 block rounded-lg bg-[#f0f5eb] px-3 py-2 text-center text-sm font-bold tracking-widest">{t.code}</code><p className="mt-1 text-center text-[10px] text-muted">Show this code at the door</p></Card>;
+          return <Card key={t.id}><div className="text-3xl" aria-hidden>{e?.icon}</div><h3 className="mt-2 font-display text-base font-bold">{e?.name}</h3><p className="text-[11px] text-muted">{e && when(e.date)} · {e?.place}</p><code className="mt-3 block rounded-lg bg-xf0f5eb px-3 py-2 text-center text-sm font-bold tracking-widest">{t.code}</code><p className="mt-1 text-center text-[10px] text-muted">Show this code at the door</p></Card>;
         })}</CardGrid>
       ))}
       {tab === 'hosting' && (hosting.length === 0 ? <Empty title="You aren't hosting anything">Submit an event for the campus admin to approve.</Empty> : (

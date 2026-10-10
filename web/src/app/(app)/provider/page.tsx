@@ -42,7 +42,7 @@ export default function ProviderHub() {
       <h2 className="mb-3 mt-8 font-display text-lg font-bold">Reviews from posters</h2>
       {k.reviewsFor(me.id, 'provider').length === 0 ? <Card className="text-xs text-muted">No reviews yet. Posters can rate you after a task is completed.</Card> : (
         <div className="grid gap-2">{k.reviewsFor(me.id, 'provider').slice(0, 6).map(r => (
-          <Card key={r.id} className="!p-4 text-xs"><div className="flex items-center justify-between"><b>{k.user(r.fromId)?.name}</b><StarRating value={r.rating} /></div>{r.comment && <p className="mt-1 text-[#4c6354]">{r.comment}</p>}<div className="mt-1 text-[10px] text-muted">{k.task(r.refId)?.title} · {when(r.ts)}</div></Card>))}</div>
+          <Card key={r.id} className="!p-4 text-xs"><div className="flex items-center justify-between"><b>{k.user(r.fromId)?.name}</b><StarRating value={r.rating} /></div>{r.comment && <p className="mt-1 text-x4c6354">{r.comment}</p>}<div className="mt-1 text-[10px] text-muted">{k.task(r.refId)?.title} · {when(r.ts)}</div></Card>))}</div>
       )}
       <h2 className="mb-3 mt-8 font-display text-lg font-bold">Payout history</h2>
       {payouts.length === 0 ? <Card className="text-xs text-muted">Payouts appear when a poster approves a milestone.</Card> : (

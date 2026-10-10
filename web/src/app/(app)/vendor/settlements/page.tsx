@@ -25,7 +25,7 @@ export default function Settlements() {
       {rows.length === 0 ? <Empty title="No settlement activity yet" /> : (
         <DataTable head={['Entry', 'Description', 'Date', 'Effect']} rows={rows.map(({ e, signed }) => [
           <code key="i" className="text-[11px]">{e.id}</code>, e.memo, when(e.ts),
-          <b key="a" className={signed >= 0 ? 'text-[#338454]' : 'text-[#c46b48]'}>{signed >= 0 ? '+' : '−'}{kc(Math.abs(signed))}</b>])} />
+          <b key="a" className={signed >= 0 ? 'text-x338454' : 'text-xc46b48'}>{signed >= 0 ? '+' : '−'}{kc(Math.abs(signed))}</b>])} />
       )}
       <Card className="mt-4 text-[11px] text-muted">Each row is a balanced double-entry journal entry. Commission is booked to KART revenue at checkout.</Card>
     </>

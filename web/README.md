@@ -24,5 +24,12 @@ npm run test:e2e     # real-browser walkthrough of every role (needs Chrome; set
 
 Modules: food, Xerox/print, supplies, services, task board (urgent / short-term / long-term), buy-sell-rent with escrow, events with approval and tickets, wallet, orders, vendor consoles by store type, provider hub, campus admin (verification, vendors, events, reports), platform admin (disputes, ledger, audit chain, fraud, users, fees).
 
+## Also included
+- Promo codes (platform-funded, ledger-backed), wishlist, product pages with verified-buyer reviews, global cart.
+- Light / dark / system theme in Settings (CSS variables in `src/app/globals.css`; generated tokens in `src/app/tokens.generated.css`).
+- 158 unit tests (`npm test`) and three browser suites (`npm run test:e2e`).
+- **Server mode** (set `DATABASE_URL`, see `.env.example`): username/password sign-in (scrypt, 7-day sessions, lockout after 5 failures), `/api/session` and `/api/action`. Every action runs on the server as the session user under a row lock, re-checks RBAC, and returns only that user's slice of the data. Setup: `npm run db:init`, then `KART_PASSWORD=... npm run db:account -- <username> <userId>`. Without `DATABASE_URL` the app stays in demo mode.
+- Tested with mocked Postgres (action allow-list, RBAC, serialisation, data filtering, auth, lockout). **Not yet run against a live Postgres.**
+
 ## Before production
 Replace `src/mock` with the FastAPI + PostgreSQL services, add real authentication, connect the PPI partner behind `PpiAdapter`, add file storage for print jobs and task attachments, and tenant data by campus. Demo data persists in `localStorage` and is shared between tabs.

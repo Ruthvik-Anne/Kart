@@ -27,10 +27,10 @@ export default function Messages() {
           <div className="grid content-start gap-2" role="list">
             {keys.map(x => (
               <button key={x.key} role="listitem" onClick={() => setSel(x.key)}
-                className={cx('rounded-xl border p-3 text-left text-xs', current?.key === x.key ? 'border-forest-800 bg-forest-100' : 'border-line bg-white')}>
+                className={cx('rounded-xl border p-3 text-left text-xs', current?.key === x.key ? 'border-forest-800 bg-forest-100' : 'border-line bg-surface')}>
                 <b className="block truncate">{x.t.title}</b>
                 <span className="text-muted">{x.other}{x.closed ? ' · closed' : ''}</span>
-                <span className="mt-1 block truncate text-[11px] text-[#4c6354]">{x.last ? x.last.body : 'No messages yet'}</span>
+                <span className="mt-1 block truncate text-[11px] text-x4c6354">{x.last ? x.last.body : 'No messages yet'}</span>
                 {x.last && <span className="text-[9px] text-muted">{when(x.last.ts)}</span>}
               </button>
             ))}
