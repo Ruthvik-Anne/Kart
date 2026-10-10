@@ -75,6 +75,7 @@ export default function Login() {
         ))}
       </div>
       <p className="mt-8 text-[11px] text-muted">KC is simulated. Payments will connect to an existing PPI partner later; nothing here moves real money.</p>
+      <a href="/live" className="mt-4 inline-block rounded-xl bg-forest-800 px-4 py-3 text-sm font-bold text-white">Open API-backed workspace →</a>
     </main>
   );
 }

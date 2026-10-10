@@ -41,10 +41,32 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run db:seed
+      - run: docker build -t kart-web-ci .
+      - name: Container smoke
+        run: |
+          docker run --name kart-web-ci -d -p 127.0.0.1:3201:3000 kart-web-ci
+          trap 'docker rm -f kart-web-ci' EXIT
+          npx --yes wait-on --timeout 30000 http://127.0.0.1:3201/live
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r ../backend/requirements.txt
       - name: Browser end-to-end
+        timeout-minutes: 6
         env:
           CHROME_PATH: /usr/bin/google-chrome
+          KART_DEMO_MODE: '1'
+          KART_SESSION_SECRET: ci-local-demo-secret-at-least-32-characters
+          KART_BACKEND_URL: http://127.0.0.1:8000
+          KART_DB_PATH: /tmp/kart-live-e2e.db
+          BASE_URL: http://127.0.0.1:3100
         run: |
+          PYTHONPATH=../backend python -m uvicorn app.main:app --port 8000 &
           npx next start -p 3100 &
-          npx --yes wait-on http://localhost:3100/login
+          npx --yes wait-on --timeout 120000 http://127.0.0.1:8000/health http://127.0.0.1:3100/login
           npm run test:e2e
+          node e2e/live.mjs
+          KART_APP_MODE=campus npx next start -p 3101 &
+          npx --yes wait-on --timeout 30000 http://127.0.0.1:3101/live
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3101/login)" = 307
+          curl -sI http://127.0.0.1:3101/login | grep -iq 'location: .*\/live'
