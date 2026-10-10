@@ -35,6 +35,7 @@ export function VendorOrders({ print }: { print?: boolean }) {
                   <div className="text-[11px] text-muted">{kc(o.amount)} paid from wallet{o.window ? ` · ${o.fulfillment === 'delivery' ? 'delivery' : 'pickup'} ${o.window}` : ''}</div>
                   {o.deliveryDetails && <div className="mt-1 text-[11px] font-bold text-forest-800">Delivery: {o.deliveryDetails}</div>}
                   <AttachmentList files={o.files} />
+                  {print && o.files?.length ? <div className="mt-2 flex flex-wrap gap-2">{o.files.map(file => <a key={file.id} href={`/api/print/file?id=${encodeURIComponent(file.id)}`} download className="rounded-lg bg-forest-100 px-2 py-1 text-[11px] font-bold text-forest-800 underline">Download {file.name}</a>)}</div> : null}
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge tone={o.status === 'Cancelled' ? 'red' : o.status === 'Ready' ? 'amber' : o.status === 'Collected' ? 'gray' : 'green'}>{o.status}</Badge>

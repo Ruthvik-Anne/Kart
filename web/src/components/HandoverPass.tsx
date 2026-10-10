@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { QrCode } from '@/components/QrCode';
-import { handoverPayload } from '@/lib/qr';
+import { downloadQrPng, handoverPayload } from '@/lib/qr';
 import { Badge, kc } from '@/components/ui';
 
 export interface PassProps {
@@ -20,11 +20,20 @@ export interface PassProps {
 export function HandoverPass({ orderId, code, status, storeName, kind, fulfillment, window: slot, deliveryDetails, amount }: PassProps) {
   const [origin, setOrigin] = useState('');
   const [copied, setCopied] = useState(false);
+  const [saved, setSaved] = useState<'idle' | 'saving' | 'done' | 'error'>('idle');
   // The pass is built after mount so server-rendered HTML and the first client render match.
   useEffect(() => { setOrigin(window.location.origin.replace(/\/$/, '')); }, []);
 
   const payload = handoverPayload(origin || 'https://kart.campus', orderId, code);
   const isDelivery = fulfillment === 'delivery';
+
+  function saveQr() {
+    if (saved === 'saving') return;
+    setSaved('saving');
+    void downloadQrPng(payload, `KART-${orderId}`, [orderId, code])
+      .then(() => { setSaved('done'); setTimeout(() => setSaved('idle'), 2000); })
+      .catch(() => { setSaved('error'); setTimeout(() => setSaved('idle'), 2500); });
+  }
 
   return (
     <div className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)]">
@@ -33,6 +42,11 @@ export function HandoverPass({ orderId, code, status, storeName, kind, fulfillme
           ? <QrCode value={payload} size={168} title={`Handover pass for ${orderId}`} />
           : <div aria-hidden className="h-[168px] w-[168px] animate-pulse rounded-lg bg-[#eef2ec]" />}
         <p className="mt-2 text-center font-mono text-[9px] font-bold uppercase tracking-widest text-muted">{orderId}</p>
+        <button type="button" onClick={saveQr} disabled={saved === 'saving'}
+          className="mt-2 w-full rounded-lg border border-[#bcd9c2] bg-white px-2 py-1.5 text-[10px] font-extrabold text-forest-800 hover:bg-forest-100 disabled:opacity-60"
+          data-save-qr={orderId}>
+          {saved === 'saving' ? 'Saving…' : saved === 'done' ? 'Saved ✓' : saved === 'error' ? 'Could not save' : '⬇ Save QR image'}
+        </button>
       </div>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">

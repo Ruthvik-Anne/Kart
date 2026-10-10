@@ -3,7 +3,7 @@
 
 export interface Attachment { id: string; name: string; size: number; type: string }
 
-export const ALLOWED_EXTENSIONS = ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'png', 'jpg', 'jpeg', 'txt'] as const;
+export const ALLOWED_EXTENSIONS = ['pdf', 'doc', 'docx', 'odt', 'rtf', 'ppt', 'pptx', 'odp', 'xls', 'xlsx', 'ods', 'csv', 'txt', 'png', 'jpg', 'jpeg', 'webp', 'tif', 'tiff'] as const;
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
 export const MAX_FILES = 5;
 

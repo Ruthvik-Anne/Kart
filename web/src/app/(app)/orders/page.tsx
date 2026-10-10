@@ -47,6 +47,7 @@ export default function Orders() {
                   </div>
                 )}
                 <AttachmentList files={o.files} />
+                {o.kind === 'print' && o.files?.length ? <div className="mt-2 flex flex-wrap gap-2">{o.files.map(file => <a key={file.id} href={`/api/print/file?id=${encodeURIComponent(file.id)}`} download className="text-[11px] font-bold text-forest-800 underline">Download {file.name}</a>)}</div> : null}
                 {o.status === 'Collected' && (k.db.reviews.find(r => r.kind === 'order' && r.refId === o.id)
                   ? <div className="mt-3 flex items-center gap-2 text-xs"><span className="text-muted">Your review</span><StarRating value={k.db.reviews.find(r => r.kind === 'order' && r.refId === o.id)!.rating} /></div>
                   : <div className="mt-3"><Button size="sm" variant="secondary" onClick={() => { setReviewing(o.id); setStars(5); setComment(''); }}>★ Rate {k.store(o.storeId)?.name}</Button></div>)}
