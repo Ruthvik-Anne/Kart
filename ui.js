@@ -40,6 +40,35 @@ function toast(message, kind = 'ok') {
   ui.toastTimer = setTimeout(() => el.remove(), 3400);
 }
 
+function copyText(text) {
+  const value = String(text || '');
+  if (!value) return false;
+  const done = () => toast(`Code ${value} copied`, 'ok');
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(value).then(done, () => fallbackCopy(value, done));
+      return true;
+    }
+  } catch { /* fall through */ }
+  fallbackCopy(value, done);
+  return true;
+}
+
+function fallbackCopy(value, done) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = value;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.append(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+    done();
+  } catch { toast('Copying is not available in this browser.', 'warn'); }
+}
+
 function applyTheme(theme) {
   const resolved = theme === 'system'
     ? (typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
@@ -242,6 +271,7 @@ function orderCard(o) {
       ${badge(cancelled ? 'Cancelled' : ready ? 'Ready for pickup' : done ? 'Picked up' : o.status, cancelled ? 'warn' : ready ? 'ok' : 'blue')}
       ${!cancelled ? progressTrack(orderProgress(o).percent) : ''}
     </div>
+    ${o.handoverCode && !cancelled ? qrPassPanel(o, { compact: true }) : ''}
     <div class="card-actions spread">
       <button class="btn tiny ghost" data-go="#/order/${o.id}">Track order</button>
       <div class="card-actions">

@@ -15,6 +15,7 @@ const seedOrder = () => ({
   fulfil: { mode: 'Pickup', slot: 'As soon as ready', note: '' },
   items: [{ id: 'f1', name: 'Masala Dosa Combo', icon: '🥘', price: 85, qty: 1, variant: '', vendor: 'Campus Bites', type: 'food' }],
   subtotal: 85, discount: 0, fee: 0, total: 85,
+  handoverCode: 'HX7KQ2PM',
   rating: 0,
   timeline: [
     { status: 'Placed', at: isoHours(-3) },
@@ -97,6 +98,7 @@ function migrate(raw) {
       fulfil: { mode: 'Pickup', slot: o.window || 'As soon as ready', note: '' },
       items: [{ id: '', name: o.title, icon: '🛍️', price: o.amount || 0, qty: 1, variant: '', vendor: o.vendor || '', type: o.type || 'food' }],
       subtotal: o.amount || 0, discount: 0, fee: 0, total: o.amount || 0, rating: 0,
+      handoverCode: o.handoverCode || QR.newCode(),
       timeline: [{ status: o.status || 'Placed', at: isoIn(-1) }]
     }));
     if (Array.isArray(raw.messages)) {
@@ -113,6 +115,8 @@ function migrate(raw) {
   Object.keys(base).forEach(key => { if (Array.isArray(base[key])) guard(key, base[key]); });
   if (!Number.isFinite(next.balance) || next.balance < 0) next.balance = base.balance;
   if (!['Student', 'Vendor', 'Organizer', 'Admin'].includes(next.role)) next.role = 'Student';
+  next.orders = (next.orders || []).map(o => o.handoverCode ? o : { ...o, handoverCode: QR.newCode() });
+  next.bookings = (next.bookings || []).map(b => b.handoverCode ? b : { ...b, handoverCode: QR.newCode() });
   return next;
 }
 
@@ -263,6 +267,7 @@ function placeOrder({ mode, slot, note = '', payment = 'KC balance' }) {
     fulfil: { mode, slot, note },
     items: lines.map(l => ({ id: l.product.id, name: l.product.name, icon: l.product.icon, price: l.product.price, qty: l.qty, variant: l.variant, vendor: l.product.vendor, type: l.product.type })),
     subtotal: totals.subtotal, discount: totals.discount, fee: totals.fee, total: totals.total,
+    handoverCode: QR.newCode(),
     rating: 0, timeline: [{ status: 'Placed', at: isoNow() }]
   };
   lines.forEach(l => { if (typeof l.product.stock === 'number') l.product.stock = Math.max(0, l.product.stock - l.qty); });
@@ -609,7 +614,7 @@ function bookService(serviceId, data) {
   if (!spend(service.price, `Booking · ${service.name}`, 'Services')) return false;
   state.bookings.unshift({
     id: makeId('BK'), serviceId, amount: service.price, name: service.name, provider: service.provider,
-    icon: service.icon, when: when.toISOString(), note, status: 'Requested', rated: 0, at: isoNow()
+    icon: service.icon, when: when.toISOString(), note, status: 'Requested', rated: 0, at: isoNow(), handoverCode: QR.newCode()
   });
   notify('service', 'Booking requested', `${service.name} with ${service.provider}`);
   audit(`Service booked: ${service.name}`);
@@ -727,6 +732,7 @@ function buyListing(id) {
     payment: 'KC balance', fulfil: { mode: 'Meet-up', slot: 'Arrange with seller', note: listing.area || '' },
     items: [{ id: listing.id, name: listing.name, icon: listing.icon, price: listing.price, qty: 1, variant: '', vendor: listing.seller, type: 'resale' }],
     subtotal: listing.price, discount: 0, fee: 0, total: listing.price, rating: 0,
+    handoverCode: QR.newCode(),
     timeline: [{ status: 'Placed', at: isoNow() }]
   };
   state.orders.unshift(order);

@@ -198,6 +198,21 @@ function handleAction(act, el, event) {
     case 'reorder': reorder(id); break;
     case 'rate': openModal('rate', id); break;
     case 'advance-order': advanceOrder(id); break;
+    case 'copy-code': {
+      const code = el.dataset.code || '';
+      copyText(code);
+      break;
+    }
+    case 'save-qr': {
+      const order = id ? getOrder(id) : null;
+      const value = el.dataset.value || (order && order.handoverCode ? QR.passPayload(order.id, order.handoverCode) : '');
+      const filename = el.dataset.filename || (order ? `kart-${order.id}` : 'kart-qr');
+      const caption = value && order && order.handoverCode ? [order.id, order.handoverCode] : null;
+      if (!value) { toast('Nothing to save for this pass.', 'warn'); break; }
+      const okSave = QR.qrDownloadPng(value, filename, caption);
+      toast(okSave ? `QR saved as ${filename}.png` : 'Saving images is not available in this browser.', okSave ? 'ok' : 'warn');
+      break;
+    }
     case 'contact-vendor': { const o = getOrder(id); openModal('chat', id, { title: `Vendor · ${o ? o.vendor : 'Shop'}`, subtitle: o ? `${o.id} · ${o.status}` : '' }); break; }
 
     /* tickets */
@@ -410,6 +425,7 @@ document.addEventListener('submit', event => {
         payment: 'KC balance', fulfil: { mode: 'Meet-up', slot: `${data.start} → ${data.end}`, note: '' },
         items: [{ id: p.id, name: `${p.name} rental`, icon: p.icon, price: p.price, qty: days, variant: `${days} day${days > 1 ? 's' : ''}`, vendor: p.vendor, type: 'resale' }],
         subtotal: p.price * days, discount: 0, fee: 0, total: p.price * days, rating: 0,
+        handoverCode: QR.newCode(),
         timeline: [{ status: 'Placed', at: isoNow() }]
       });
       notify('resale', 'Rental requested', `${p.name} for ${days} day${days > 1 ? 's' : ''}.`);
@@ -429,19 +445,21 @@ document.addEventListener('submit', event => {
       }
       const amount = pages * copies * (data.colour === 'colour' ? 8 : 2) + (data.binding === 'spiral' ? 30 : 0);
       if (!spend(amount, `Print · ${name}`, 'Orders')) return;
-      state.orders.unshift({
+      const printOrder = {
         id: makeId('PRT'), type: 'xerox', vendor: data.shop, created: isoNow(), status: 'Placed', auto: true,
         payment: 'KC balance', fulfil: { mode: 'Pickup', slot: 'When ready', note: `${data.sides === 'duplex' ? 'Double-sided' : 'Single-sided'} · ${copies} cop${copies > 1 ? 'ies' : 'y'}` },
         items: [{ id: '', name: `Print: ${name}`, icon: '🖨️', price: amount, qty: 1, variant: `${pages} pages × ${copies}`, vendor: data.shop, type: 'xerox' }],
         subtotal: amount, discount: 0, fee: 0, total: amount, rating: 0,
+        handoverCode: QR.newCode(),
         timeline: [{ status: 'Placed', at: isoNow() }]
-      });
+      };
+      state.orders.unshift(printOrder);
       notify('xerox', 'Print request created', `${name} · ${kc(amount)} at ${data.shop}`);
       audit(`Print request created for ${kc(amount)}`);
       ui.modal = null;
-      navigate('#/orders');
-      scheduleOrderProgress(state.orders[0].id);
-      toast('Print request is in the queue', 'ok');
+      navigate(`#/order/${printOrder.id}`);
+      scheduleOrderProgress(printOrder.id);
+      toast(`Print request placed — QR pass ${printOrder.handoverCode} is ready`, 'ok');
       break;
     }
 

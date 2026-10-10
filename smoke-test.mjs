@@ -39,7 +39,7 @@ const balance = () => run('state.balance');
 const html = () => app.innerHTML;
 const future = days => new Date(Date.now() + days * 86400000).toISOString();
 
-for (const file of ['data.js', 'store.js', 'ui.js', 'modals.js', 'pages.js', 'app.js']) {
+for (const file of ['qr.js', 'data.js', 'store.js', 'ui.js', 'modals.js', 'pages.js', 'app.js']) {
   run(await readFile(new URL(`./${file}`, import.meta.url), 'utf8'));
 }
 
@@ -111,6 +111,22 @@ assert.equal(run('state.orders.length'), 2);
 assert.equal(run('state.orders[0].fulfil.note'), 'extra chutney');
 assert.match(html(), /Picked|Placed|Preparing|Ready/, 'order page did not render a status');
 const placedOrder = run('state.orders[0].id');
+const placedCode = run('state.orders[0].handoverCode');
+assert.ok(placedCode && /^[A-Z0-9]{8}$/.test(placedCode), 'checkout should mint an 8-character handover code');
+assert.match(html(), /qr-pass/, 'order page should render the QR pass panel');
+assert.ok(html().includes(`<svg`), 'QR pass should include a real QR <svg>');
+assert.ok(html().includes(placedCode), 'the handover code should be visible on the pass');
+
+/* a second order must get a different, unique code */
+run('addToCart("f2")');
+run('ui.checkout = { step: 3, mode: "Pickup", slot: "As soon as ready", note: "", payment: "KC balance" }');
+click('place-order');
+assert.notEqual(run('state.orders[0].handoverCode'), placedCode, 'each order must get a unique handover code');
+/* copy + save actions must be wired and must not throw, even in a bare DOM */
+assert.equal(run('typeof handleAction'), 'function', 'handleAction should exist');
+assert.equal(run(`handleAction("copy-code", { dataset: { code: "ABCDEFGH" } })`), undefined);
+assert.equal(run(`handleAction("save-qr", { dataset: { id: ${JSON.stringify(placedOrder)} } })`), undefined);
+run('state.cart = []; state.promo = null; save();');
 
 /* ---------- print, merchandise and rental orders ---------- */
 
@@ -118,6 +134,8 @@ const afterCheckout = balance();
 submit('print-form', { document: 'Notes.pdf', pages: '3', copies: '2', colour: 'bw', sides: 'duplex', binding: 'spiral', shop: 'Library Xerox' });
 assert.equal(balance(), afterCheckout - (3 * 2 * 2 + 30));
 assert.match(run('state.orders[0].title || state.orders[0].items[0].name'), /Notes\.pdf/);
+assert.ok(run('state.orders[0].handoverCode'), 'xerox/print order should auto-generate a handover code after wallet payment');
+assert.match(html(), /qr-pass/, 'print order page should render the QR pass automatically');
 
 const afterPrint = balance();
 submit('rent-form', { start: future(3), end: future(4) }, { id: 'r2' });
@@ -183,6 +201,13 @@ const seatsBefore = run('state.events.find(e => e.id === "e1").taken');
 assert.equal(run('registerEvent("e1")'), true);
 assert.equal(run('state.events.find(e => e.id === "e1").taken'), seatsBefore + 1);
 assert.equal(run('state.tickets.length'), 1);
+const ticketCode = run('state.tickets[0].code');
+assert.ok(ticketCode, 'a ticket must carry a gate code');
+navigate('#/orders');
+click('order-tab', { tab: 'tickets' });
+assert.match(html(), /qr-pass/, 'tickets tab should render a QR gate pass');
+assert.ok(html().includes(ticketCode), 'the gate pass should show the ticket code');
+
 assert.equal(run('registerEvent("e1")'), false, 'double registration should be rejected');
 const ticketId = run('state.tickets[0].id');
 const beforeTicket = balance();
@@ -197,6 +222,12 @@ const beforeBooking = balance();
 assert.equal(run(`bookService("v1", { date: ${JSON.stringify(future(2).slice(0, 10))}, time: "12:00", note: "Calculus help" })`), true);
 assert.equal(balance(), beforeBooking - 250);
 const bookingId = run('state.bookings.find(b => b.serviceId === "v1" && b.status !== "Cancelled").id');
+const bookingCode = run(`state.bookings.find(b => b.id === ${JSON.stringify(bookingId)}).handoverCode`);
+assert.ok(bookingCode && /^[A-Z0-9]{8}$/.test(bookingCode), 'a booking must mint an 8-character code');
+navigate('#/orders');
+click('order-tab', { tab: 'bookings' });
+assert.match(html(), /qr-pass/, 'bookings tab should render a QR booking pass');
+assert.ok(html().includes(bookingCode), 'the booking pass should show the code');
 assert.equal(run(`cancelBooking(${JSON.stringify(bookingId)})`), true);
 assert.equal(balance(), beforeBooking);
 assert.equal(run(`rateBooking(${JSON.stringify(bookingId)}, 5)`), false, 'cancelled bookings cannot be rated');
@@ -220,6 +251,7 @@ const beforeBuy = balance();
 assert.equal(run('buyListing("L-3006")'), true);
 assert.equal(balance(), beforeBuy - 690);
 assert.equal(run('state.listings.find(l => l.id === "L-3006").status'), 'sold');
+assert.ok(run('state.orders.find(o => o.type === "resale" && o.items.some(i => i.id === "L-3006")).handoverCode'), 'resale purchase should mint a handover code');
 assert.equal(run(`removeListing(${JSON.stringify(listingId)})`), true);
 
 /* ---------- wallet ---------- */

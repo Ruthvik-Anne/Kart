@@ -316,6 +316,43 @@ function checkoutPage() {
 
 /* ---------- orders ---------- */
 
+/* Reusable booking pass: scannable QR + a printed code, with copy and save-image. */
+function qrPass(cfg, opts = {}) {
+  const { id, code, vendor = '', payload, href = '', hint, compact = false, eyebrow = 'Handover pass', codeLabel = 'Handover code' } = cfg;
+  if (!code) return '';
+  const value = payload || QR.passPayload(id, code);
+  const svg = QR.qrToSvg(value, { px: compact ? 116 : 168, title: `${eyebrow} for ${id}` });
+  const line = hint || 'Show this QR or read out the code when you collect. Share it only with the person handing over your order.';
+  return `<div class="qr-pass ${compact ? 'compact' : ''}" data-qr-pass="${esc(id)}">
+    <div class="qr-pass-qr">${svg}<span class="qr-pass-id">${esc(id)}</span></div>
+    <div class="qr-pass-body">
+      <div class="qr-pass-eyebrow">${esc(eyebrow)}${vendor ? ` · ${esc(vendor)}` : ''}</div>
+      <p class="qr-pass-hint">${line}</p>
+      <div class="qr-pass-code">
+        <span class="qr-pass-code-label">${esc(codeLabel)}</span>
+        <div class="qr-pass-code-row"><code>${esc(code)}</code>
+          <button class="btn tiny ghost" data-act="copy-code" data-code="${esc(code)}">Copy</button>
+        </div>
+      </div>
+      <div class="card-actions">
+        <button class="btn tiny" data-act="save-qr" data-id="${esc(id)}" data-value="${esc(value)}" data-filename="${esc('kart-' + id)}">⬇ Save QR image</button>
+        ${href ? `<button class="btn tiny ghost" data-go="${esc(href)}">Open order</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+function qrPassPanel(order, opts = {}) {
+  return qrPass({
+    id: order.id,
+    code: order.handoverCode,
+    vendor: order.vendor,
+    href: `#/order/${order.id}`,
+    hint: order.type === 'xerox' ? 'Show this at the print shop when you pick up your printout.' : '',
+    compact: !!opts.compact
+  }, opts);
+}
+
 function ordersPage() {
   const tab = ui.orderTab;
   const statusFilter = ui.orderStatus;
@@ -345,6 +382,13 @@ function ordersPage() {
           <div class="card-eyebrow">${shortDate(t.date)} · ${timeOnly(t.date)}</div>
           <h3>${esc(t.name)}</h3>
           <p class="card-desc">${esc(t.place)} · purchased ${relative(t.at)}</p>
+          ${qrPass({
+            id: t.id, code: t.code, vendor: event ? event.place : '',
+            payload: `#/events?tk=${encodeURIComponent(t.id)}&c=${encodeURIComponent(t.code)}`,
+            href: '#/events', eyebrow: 'Event pass', codeLabel: 'Ticket code',
+            hint: 'Show this QR at the gate — staff can scan it or read the code aloud.',
+            compact: true
+          })}
           <div class="card-actions spread">
             <label class="tool check"><input type="checkbox" data-act="checkin" data-id="${t.id}" ${t.checkedIn ? 'checked' : ''} /> Gate checked in</label>
             <button class="btn tiny ghost" data-act="cancel-ticket" data-id="${t.id}">Cancel & refund</button>
@@ -364,6 +408,12 @@ function ordersPage() {
             ${b.rated ? stars(b.rated) : ''}
           </div>
         </div>
+        ${b.handoverCode && b.status !== 'Cancelled' ? qrPass({
+          id: b.id, code: b.handoverCode, vendor: b.provider, href: '#/services',
+          eyebrow: 'Booking pass', codeLabel: 'Booking code',
+          hint: 'Show this to the provider when they arrive so they can confirm the handover.',
+          compact: true
+        }) : ''}
         <div class="card-actions" style="margin-top:12px">
           ${b.status === 'Cancelled' ? '' : `<button class="btn tiny ghost" data-act="cancel-booking" data-id="${b.id}">Cancel & refund</button>`}
           ${b.status === 'Confirmed' && !b.rated ? `<button class="btn tiny" data-act="rate-booking" data-id="${b.id}">Rate provider</button>` : ''}
@@ -383,6 +433,7 @@ function orderPage(id) {
     `${!cancelled && !['Picked up'].includes(order.status) ? `<button class="btn ghost" data-act="cancel-order" data-id="${order.id}">Cancel order</button>` : ''}
      ${order.rating ? '' : `<button class="btn ghost" data-act="rate" data-id="${order.id}">Rate order</button>`}
      <button class="btn" data-act="reorder" data-id="${order.id}">Reorder →</button>`)}
+  ${order.handoverCode && !cancelled ? `<section class="panel">${qrPassPanel(order)}</section>` : ''}
   <div class="grid two-col">
     <section class="panel">
       <h3>${cancelled ? 'Cancelled' : order.status === 'Picked up' ? 'Completed' : 'Live status'}</h3>

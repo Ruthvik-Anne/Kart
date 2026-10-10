@@ -1,10 +1,39 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useKart } from '@/mock/StoreProvider';
+import { QrCode } from '@/components/QrCode';
+import { downloadQrPng } from '@/lib/qr';
 import { Badge, Button, Card, CardGrid, Empty, Field, inputCls, kc, Modal, PageHead, Tabs, when } from '@/components/ui';
 
 type Tab = 'discover' | 'tickets' | 'hosting';
 const toLocal = (ms: number) => new Date(ms - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+
+function TicketPass({ ticketId, code, eventName }: { ticketId: string; code: string; eventName: string }) {
+  const [origin, setOrigin] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [saved, setSaved] = useState<'idle' | 'saving' | 'done' | 'error'>('idle');
+  useEffect(() => { setOrigin(window.location.origin.replace(/\/$/, '')); }, []);
+  const payload = `${origin || 'https://kart.campus'}/events?tk=${encodeURIComponent(ticketId)}&c=${encodeURIComponent(code)}`;
+  return (
+    <div className="mt-3 flex items-center gap-3 rounded-xl border border-line bg-[#fbfcfa] p-3">
+      <div className="rounded-lg bg-white p-1">{origin ? <QrCode value={payload} size={84} title={`Ticket QR for ${eventName}`} /> : <div aria-hidden className="h-[84px] w-[84px] animate-pulse rounded bg-[#eef2ec]" />}</div>
+      <div className="min-w-0">
+        <code className="block truncate font-mono text-sm font-extrabold tracking-widest text-forest-950">{code}</code>
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          <button type="button" className="rounded-md border border-line bg-white px-2 py-1 text-[10px] font-bold text-forest-800 hover:bg-forest-100"
+            onClick={() => { void navigator.clipboard?.writeText(code).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }); }}>
+            {copied ? 'Copied' : 'Copy code'}
+          </button>
+          <button type="button" disabled={saved === 'saving'}
+            className="rounded-md border border-line bg-white px-2 py-1 text-[10px] font-bold text-forest-800 hover:bg-forest-100 disabled:opacity-60"
+            onClick={() => { setSaved('saving'); void downloadQrPng(payload, `KART-TICKET-${ticketId}`, [ticketId, code]).then(() => { setSaved('done'); setTimeout(() => setSaved('idle'), 2000); }).catch(() => { setSaved('error'); setTimeout(() => setSaved('idle'), 2500); }); }}>
+            {saved === 'saving' ? 'Saving…' : saved === 'done' ? 'Saved ✓' : saved === 'error' ? 'Could not save' : '⬇ Save QR'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Events() {
   const { k, me, act } = useKart();
@@ -46,7 +75,7 @@ export default function Events() {
       {tab === 'tickets' && (tickets.length === 0 ? <Empty title="No tickets yet">Register for an event to see it here.</Empty> : (
         <CardGrid>{tickets.map(t => {
           const e = k.db.events.find(x => x.id === t.eventId);
-          return <Card key={t.id}><div className="text-3xl" aria-hidden>{e?.icon}</div><h3 className="mt-2 font-display text-base font-bold">{e?.name}</h3><p className="text-[11px] text-muted">{e && when(e.date)} · {e?.place}</p><code className="mt-3 block rounded-lg bg-[#f0f5eb] px-3 py-2 text-center text-sm font-bold tracking-widest">{t.code}</code><p className="mt-1 text-center text-[10px] text-muted">Show this code at the door</p></Card>;
+          return <Card key={t.id}><div className="text-3xl" aria-hidden>{e?.icon}</div><h3 className="mt-2 font-display text-base font-bold">{e?.name}</h3><p className="text-[11px] text-muted">{e && when(e.date)} · {e?.place}</p><TicketPass ticketId={t.id} code={t.code} eventName={e?.name ?? 'event'} /><p className="mt-1 text-center text-[10px] text-muted">Show this QR or read out the code at the door</p></Card>;
         })}</CardGrid>
       ))}
       {tab === 'hosting' && (hosting.length === 0 ? <Empty title="You aren't hosting anything">Submit an event for the campus admin to approve.</Empty> : (
