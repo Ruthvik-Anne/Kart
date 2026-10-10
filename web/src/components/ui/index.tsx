@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { useEffect, useRef, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from 'react';
 import type { Permission, Resource } from '@/rbac/policy';
 import { can } from '@/rbac/policy';
 import { useKart } from '@/mock/StoreProvider';
@@ -26,8 +26,8 @@ export function Button({ variant = 'primary', size = 'md', className, ...p }: Bt
   return <button {...p} className={cx('inline-flex items-center justify-center gap-2 rounded-xl font-extrabold whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50', size === 'sm' ? 'px-3 py-2 text-[11px]' : 'px-4 py-2.5 text-xs', v, className)} />;
 }
 
-export function Card({ children, className }: { children: ReactNode; className?: string }) {
-  return <section className={cx('rounded-2xl border border-line bg-white p-5', className)}>{children}</section>;
+export function Card({ children, className, ...rest }: Omit<HTMLAttributes<HTMLElement>, 'children'> & { children: ReactNode; className?: string }) {
+  return <section {...rest} className={cx('rounded-2xl border border-line bg-white p-5', className)}>{children}</section>;
 }
 
 const TONES = { green: 'bg-forest-100 text-[#3e7c45]', amber: 'bg-[#fff1d7] text-[#a66f1e]', blue: 'bg-[#eaf0fb] text-[#4972a9]', red: 'bg-[#fde8e8] text-[#b42318]', gray: 'bg-[#eef1ed] text-[#5d6f63]' };

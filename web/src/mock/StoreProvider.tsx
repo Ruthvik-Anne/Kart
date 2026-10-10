@@ -1,11 +1,8 @@
 'use client';
-// Holds the mock backend in React state, persists it to localStorage, and exposes the demo session.
+// UI adapter for authenticated, campus-scoped state and server-checked mutations.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Kart, seed, type Db, type Result } from './db';
+import { Kart, emptyState, type Db, type Result } from './db';
 import type { User } from '@/rbac/policy';
-
-const DB_KEY = 'kart-web-db-v3';
-const SESSION_KEY = 'kart-web-session-v1';
 
 interface Toast { id: number; text: string; tone: 'ok' | 'error' }
 
@@ -14,11 +11,11 @@ interface Ctx {
   k: Kart;
   me: User | null;
   version: number;
-  /** Run a mutation, persist, re-render, toast the outcome. */
+  /** Run a server-checked mutation, then refresh the visible campus state. */
   act: <T extends object>(fn: (k: Kart, me: User) => Result<T> | Promise<Result<T>>, okText?: string) => Promise<Result<T>>;
-  signIn: (userId: string) => void;
+  /** Load state after the auth server establishes a session. */
+  adopt: (user: User) => void;
   signOut: () => void;
-  reset: () => void;
   toasts: Toast[];
 }
 
@@ -32,39 +29,41 @@ export function useKart(): Ctx {
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const kart = useRef<Kart>(null as unknown as Kart);
-  if (!kart.current) kart.current = new Kart(seed());
+  if (!kart.current) kart.current = new Kart(emptyState());
   const [ready, setReady] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const persist = useCallback(() => {
-    try { localStorage.setItem(DB_KEY, JSON.stringify(kart.current.db)); } catch { /* storage full or blocked: demo continues in memory */ }
+  const loadState = useCallback(async (user: User) => {
+    const res = await fetch('/api/state', { cache: 'no-store' });
+    if (!res.ok) throw new Error('Campus data is unavailable. Try again.');
+    const { state } = await res.json() as { state: Db };
+    kart.current = new Kart(state);
+    setSessionId(user.id);
+    setVersion(v => v + 1);
   }, []);
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(DB_KEY);
-      if (raw) {
-        const db = JSON.parse(raw) as Db;
-        const arrays: (keyof Db)[] = ['users', 'entries', 'tasks', 'listings', 'events', 'tickets', 'vendorApps', 'stores', 'products', 'orders', 'reviews', 'workflows'];
-        if (arrays.every(key => Array.isArray(db[key]))) kart.current = new Kart(db);
-      }
-      setSessionId(localStorage.getItem(SESSION_KEY));
-    } catch { /* corrupt saved data: fall back to fresh seed */ }
-    setReady(true);
-  }, []);
+  const adoptUser = useCallback((user: User) => {
+    void loadState(user).catch(() => setSessionId(null));
+  }, [loadState]);
 
-  // Keep several tabs in step, which also mimics the realtime channel the backend will provide.
   useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === DB_KEY && e.newValue) {
-        try { kart.current = new Kart(JSON.parse(e.newValue) as Db); setVersion(v => v + 1); } catch { /* ignore */ }
-      }
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
+    // Only a verified server session may restore access after a page load.
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/auth/session', { cache: 'no-store' });
+        if (res.ok) {
+          const { user } = (await res.json()) as { user: User | null };
+          if (user && !cancelled) await loadState(user);
+        }
+      } catch { /* Fail closed when the auth API is unavailable. */ }
+      if (cancelled) return;
+      setReady(true);
+    })();
+    return () => { cancelled = true; };
+  }, [loadState]);
 
   const toast = useCallback((text: string, tone: Toast['tone']) => {
     const id = Date.now() + Math.random();
@@ -72,30 +71,49 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3800);
   }, []);
 
-  const me = useMemo(() => kart.current.user(sessionId ?? '') ?? null, [sessionId, version, ready]); // eslint-disable-line react-hooks/exhaustive-deps
+  const me = useMemo(() => kart.current.user(sessionId ?? '') ?? null, [sessionId, version]);
 
   const act: Ctx['act'] = useCallback(async (fn, okText) => {
     const user = kart.current.user(sessionId ?? '');
     if (!user) { const r = { ok: false as const, error: 'Please sign in.' }; toast(r.error, 'error'); return r; }
-    const result = await fn(kart.current, user);
-    if (result.ok) { persist(); setVersion(v => v + 1); if (okText) toast(okText, 'ok'); }
-    else toast(result.error, 'error');
-    return result;
-  }, [sessionId, persist, toast]);
+    let call: { action: string; args: unknown[] } | null = null;
+    const recorder = new Proxy(kart.current, {
+      get(target, property, receiver) {
+        const value = Reflect.get(target, property, receiver);
+        if (typeof value !== 'function') return value;
+        return (...args: unknown[]) => {
+          call = { action: String(property), args };
+          return { ok: true };
+        };
+      },
+    });
+    try {
+      await fn(recorder, user);
+      if (!call) throw new Error('No action was selected.');
+      const res = await fetch('/api/state', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(call),
+      });
+      const data = await res.json() as { result?: Result<object>; state?: Db; error?: string };
+      if (!res.ok || !data.result) throw new Error(data.error || 'Could not save this change.');
+      if (data.state) { kart.current = new Kart(data.state); setVersion(v => v + 1); }
+      if (data.result.ok) { if (okText) toast(okText, 'ok'); }
+      else toast(data.result.error, 'error');
+      return data.result;
+    } catch (error) {
+      const result = { ok: false as const, error: error instanceof Error ? error.message : 'Could not save this change.' };
+      toast(result.error, 'error');
+      return result;
+    }
+  }, [sessionId, toast]);
 
-  const signIn = useCallback((userId: string) => {
-    localStorage.setItem(SESSION_KEY, userId);
-    setSessionId(userId);
-  }, []);
-  const signOut = useCallback(() => { localStorage.removeItem(SESSION_KEY); setSessionId(null); }, []);
-  const reset = useCallback(() => {
-    kart.current = new Kart(seed());
-    persist();
+  const signOut = useCallback(() => {
+    setSessionId(null);
+    kart.current = new Kart(emptyState());
     setVersion(v => v + 1);
-    toast('Demo data reset', 'ok');
-  }, [persist, toast]);
+  }, []);
 
-  const value: Ctx = { ready, k: kart.current, me, version, act, signIn, signOut, reset, toasts };
+  const value: Ctx = { ready, k: kart.current, me, version, act, adopt: adoptUser, signOut, toasts };
   return (
     <StoreCtx.Provider value={value}>
       {children}

@@ -93,7 +93,21 @@ describe('route guard', () => {
   it('sends each role to its own home', () => {
     expect(homeFor(student)).toBe('/dashboard');
     expect(homeFor(canteen)).toBe('/vendor');
-    expect(homeFor(campusAdmin)).toBe('/admin/verification');
-    expect(homeFor(platformAdmin)).toBe('/admin/disputes');
+    expect(homeFor(campusAdmin)).toBe('/admin');
+    expect(homeFor(platformAdmin)).toBe('/admin');
+  });
+  it('gates the admin dashboard on admin permissions', () => {
+    expect(canVisit(student, '/admin')).toBe(false);
+    expect(canVisit(canteen, '/admin')).toBe(false);
+    expect(canVisit(campusAdmin, '/admin')).toBe(true);
+    expect(canVisit(platformAdmin, '/admin')).toBe(true);
+    expect(labels(campusAdmin)).toContain('Overview');
+    expect(labels(student)).not.toContain('Overview');
+  });
+  it('offers students the delivery board', () => {
+    expect(labels(student)).toContain('Delivery jobs');
+    expect(labels(canteen)).not.toContain('Delivery jobs');
+    expect(can(student, 'order:deliver')).toBe(true);
+    expect(can(canteen, 'order:deliver')).toBe(false);
   });
 });

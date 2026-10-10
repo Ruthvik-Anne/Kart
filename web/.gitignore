@@ -3,3 +3,9 @@ node_modules/
 next-env.d.ts
 *.tsbuildinfo
 *.png
+# Campus branding shipped with the app (screenshots stay ignored above).
+!public/college/*.png
+.env
+.env.local
+.env.*.local
+*.log

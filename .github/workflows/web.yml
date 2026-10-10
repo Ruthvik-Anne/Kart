@@ -13,6 +13,22 @@ jobs:
     defaults:
       run:
         working-directory: web
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: kart
+          POSTGRES_PASSWORD: kart_local_dev
+          POSTGRES_DB: kart
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://kart:kart_local_dev@localhost:5432/kart
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,6 +40,7 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      - run: npm run db:seed
       - name: Browser end-to-end
         env:
           CHROME_PATH: /usr/bin/google-chrome

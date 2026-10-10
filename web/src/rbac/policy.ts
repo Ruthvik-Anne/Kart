@@ -5,7 +5,7 @@ export type Role = 'student' | 'vendor' | 'campus_admin' | 'platform_admin';
 export type StoreType = 'canteen' | 'xerox' | 'stationery' | 'merch';
 
 export type Permission =
-  | 'catalog:view' | 'order:create' | 'order:view:own' | 'print:create'
+  | 'catalog:view' | 'order:create' | 'order:view:own' | 'print:create' | 'order:deliver'
   | 'task:view' | 'task:post' | 'task:bid' | 'task:approve' | 'thread:use'
   | 'service:offer' | 'listing:create' | 'event:register' | 'event:create' | 'wallet:view:own'
   | 'provider:hub'
@@ -14,7 +14,7 @@ export type Permission =
   | 'dispute:resolve' | 'ledger:view:all' | 'chain:audit' | 'fraud:view' | 'user:roles' | 'fees:edit';
 
 const STUDENT: Permission[] = [
-  'catalog:view', 'order:create', 'order:view:own', 'print:create', 'task:view', 'task:post',
+  'catalog:view', 'order:create', 'order:view:own', 'print:create', 'order:deliver', 'task:view', 'task:post',
   'task:bid', 'task:approve', 'thread:use', 'service:offer', 'listing:create', 'event:register',
   'event:create', 'wallet:view:own',
 ];
@@ -87,6 +87,7 @@ export const NAV: NavItem[] = [
   { href: '/services', label: 'Student Services', icon: '✦', requires: 'catalog:view', section: 'Campus', roles: ['student'] },
   { href: '/tasks', label: 'Task Board', icon: '⚡', requires: 'task:view', section: 'Campus' },
   { href: '/my-tasks', label: 'My Tasks', icon: '☑', requires: 'task:post', section: 'Campus' },
+  { href: '/delivery', label: 'Delivery jobs', icon: '🛵', requires: 'order:deliver', section: 'Work', roles: ['student'] },
   { href: '/marketplace', label: 'Buy / Sell / Rent', icon: '⇄', requires: 'listing:create', section: 'More' },
   { href: '/events', label: 'Events', icon: '◇', requires: 'event:register', section: 'More' },
   { href: '/orders', label: 'My Orders', icon: '◫', requires: 'order:view:own', section: 'More' },
@@ -103,6 +104,7 @@ export const NAV: NavItem[] = [
   { href: '/vendor/pricing', label: 'Pricing', icon: '₹', requires: 'store:manage', section: 'Store', storeTypes: ['xerox'] },
   { href: '/vendor/settlements', label: 'Settlements', icon: '◉', requires: 'store:settlements', section: 'Store' },
 
+  { href: '/admin', label: 'Overview', icon: '▦', requires: 'user:verify', section: 'Admin' },
   { href: '/admin/verification', label: 'Verification', icon: '✔', requires: 'user:verify', section: 'Admin' },
   { href: '/admin/vendors', label: 'Vendors', icon: '🏪', requires: 'vendor:approve', section: 'Admin' },
   { href: '/admin/events', label: 'Event approvals', icon: '◇', requires: 'event:approve', section: 'Admin' },
@@ -137,8 +139,8 @@ export function canVisit(user: User | null | undefined, pathname: string): boole
 }
 
 export function homeFor(user: User): string {
-  if (user.roles.includes('platform_admin')) return '/admin/disputes';
-  if (user.roles.includes('campus_admin')) return '/admin/verification';
+  if (user.roles.includes('platform_admin')) return '/admin';
+  if (user.roles.includes('campus_admin')) return '/admin';
   if (user.roles.includes('vendor')) return '/vendor';
   return '/dashboard';
 }

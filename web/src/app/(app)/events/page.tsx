@@ -35,7 +35,7 @@ export default function Events() {
                   <div className="mt-1 text-[11px] text-muted">📍 {e.place} · {left > 0 ? `${left} seats left` : 'Full'}</div>
                   <div className="mt-3 flex items-center justify-between">
                     <span className="font-display text-lg font-bold">{e.price ? kc(e.price) : 'Free'}</span>
-                    <Button size="sm" disabled={has || mine || left <= 0} onClick={() => act(kart => kart.registerEvent(me, e.id), 'You’re in! Ticket added')}>{mine ? 'Your event' : has ? 'Registered' : left <= 0 ? 'Sold out' : 'Register'}</Button>
+                    <Button size="sm" disabled={has || mine || left <= 0 || e.price > 0} onClick={() => act(kart => kart.registerEvent(me, e.id), 'You’re in! Ticket added')}>{mine ? 'Your event' : has ? 'Registered' : left <= 0 ? 'Sold out' : e.price > 0 ? 'Payments unavailable' : 'Register'}</Button>
                   </div>
                 </div>
               </article>

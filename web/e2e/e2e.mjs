@@ -27,6 +27,8 @@ const loginAs = async name => { await go('/login'); await clickText(name); await
 const switchUser = async name => {
   const id = await page.evaluate(n => { const o = [...document.querySelectorAll('#demo-user option')].find(x => x.textContent === n); return o?.value; }, name);
   await page.select('#demo-user', id); await new Promise(r => setTimeout(r, 600));
+  // The switch performs a real sign-in; wait until the session (and select) actually changed.
+  await page.waitForFunction(x => document.querySelector('#demo-user')?.value === x, { timeout: 5000 }, id);
 };
 const nav = async () => page.evaluate(() => [...document.querySelectorAll('aside nav a')].map(a => a.textContent.trim()));
 const setNum = async (el, v) => { await el.focus(); await page.keyboard.down('Control'); await page.keyboard.press('KeyA'); await page.keyboard.up('Control'); await page.keyboard.type(String(v)); };
@@ -34,7 +36,11 @@ const shot = async n => page.screenshot({ path: `${process.env.SHOT_DIR || '.'}/
 
 try {
   await go('/login');
-  check('login page lists all four roles', ['Students', 'Vendors', 'Campus administrators', 'Platform administrators'].every(s => true) && await has('Pick a demo user'));
+  await waitText('POSTGRES-SEEDED');
+  const groupHeadings = ['students', 'vendors', 'campus administrators', 'platform administrators'];
+  const loginText = (await text()).toLowerCase();
+  check('login page has a credential form and lists all four demo roles',
+    ['username', 'password', 'demo accounts', ...groupHeadings].every(s => loginText.includes(s)));
 
   // ----- student shell & nav
   await loginAs('Alex Sharma');

@@ -37,6 +37,8 @@ const loginAs = async name => { await go('/login'); await clickText(name); await
 const switchUser = async name => {
   const id = await page.evaluate(n => [...document.querySelectorAll('#demo-user option')].find(x => x.textContent === n)?.value, name);
   await page.select('#demo-user', id); await sleep(600);
+  // The switch performs a real sign-in; wait until the session (and select) actually changed.
+  await page.waitForFunction(x => document.querySelector('#demo-user')?.value === x, { timeout: 5000 }, id);
 };
 const setNum = async (el, v) => { await el.focus(); await page.keyboard.down('Control'); await page.keyboard.press('KeyA'); await page.keyboard.up('Control'); await page.keyboard.type(String(v)); };
 const toast = async () => (await page.evaluate(() => [...document.querySelectorAll('[role=status]')].map(e => e.textContent).join(' | ')));
@@ -138,6 +140,8 @@ try {
   await descs[1].type('Bring to Hostel C');
   await clickText('Create workflow');
   await page.waitForFunction(() => location.pathname === '/my-tasks', { timeout: 6000 });
+  // Cards render after the URL changes; wait for the created steps before reading them.
+  await page.waitForFunction(() => [...document.querySelectorAll('a[href^="/tasks/T-"]')].some(a => (a.textContent || '').includes('Collect the items')), { timeout: 6000 });
   const hrefs = await page.evaluate(() => [...document.querySelectorAll('a[href^="/tasks/T-"]')].map(a => ({ h: a.getAttribute('href'), t: a.textContent })));
   const step2 = hrefs.find(x => x.t.includes('Deliver to me'));
   check('workflow creates both steps', hrefs.some(x => x.t.includes('Collect the items')) && !!step2);
