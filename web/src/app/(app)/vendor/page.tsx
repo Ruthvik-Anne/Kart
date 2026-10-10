@@ -28,14 +28,14 @@ export default function VendorConsole() {
         <Card>
           <h2 className="mb-3 font-display text-base font-bold">Needs attention</h2>
           {active.length === 0 && low.length === 0 && <p className="text-xs text-muted">All caught up.</p>}
-          {active.slice(0, 4).map(o => <div key={o.id} className="flex items-center justify-between border-b border-xeff2ed py-2 text-xs"><span className="truncate font-bold">{o.title}</span><Badge tone="amber">{o.status}</Badge></div>)}
-          {low.map(p => <div key={p.id} className="flex items-center justify-between border-b border-xeff2ed py-2 text-xs"><span>{p.name}</span><Badge tone="red">{p.stock} left</Badge></div>)}
-          <Link href={queue} className="mt-3 inline-block text-[11px] font-extrabold text-forest-800">Open {store.type === 'xerox' ? 'print' : 'order'} queue →</Link>
+          {active.slice(0, 4).map(o => <div key={o.id} className="flex items-center justify-between border-b border-line py-2 text-xs"><span className="truncate font-bold">{o.title}</span><Badge tone="amber">{o.status}</Badge></div>)}
+          {low.map(p => <div key={p.id} className="flex items-center justify-between border-b border-line py-2 text-xs"><span>{p.name}</span><Badge tone="red">{p.stock} left</Badge></div>)}
+          <Link href={queue} className="mt-3 inline-block text-[11px] font-extrabold text-brand-800 hover:underline">Open {store.type === 'xerox' ? 'print' : 'order'} queue →</Link>
         </Card>
         <Card>
           <h2 className="mb-3 font-display text-base font-bold">Commission</h2>
           <p className="text-xs leading-relaxed text-muted">KART keeps {(k.db.fees.vendorCommissionRate * 100).toFixed(0)}% of each order. Payouts are settled to your bank through the payment partner. Settlement here is simulated until the partner is connected.</p>
-          <Link href="/vendor/settlements" className="mt-3 inline-block text-[11px] font-extrabold text-forest-800">View settlements →</Link>
+          <Link href="/vendor/settlements" className="mt-3 inline-block text-[11px] font-extrabold text-brand-800 hover:underline">View settlements →</Link>
         </Card>
       </div>
     </>

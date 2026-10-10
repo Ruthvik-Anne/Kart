@@ -56,7 +56,7 @@ export default function NewTask() {
           <div role="radiogroup" aria-label="Task type" className="grid gap-3 sm:grid-cols-3">
             {KINDS.map(o => (
               <button key={o.id} type="button" role="radio" aria-checked={kind === o.id} onClick={() => pickKind(o.id)}
-                className={`rounded-xl border p-3 text-left text-xs ${kind === o.id ? 'border-forest-800 bg-forest-100' : 'border-xdce7dc'}`}>
+                className={`rounded-xl border p-3 text-left text-xs ${kind === o.id ? 'border-brand-900 bg-brand-50' : 'border-brand-200'}`}>
                 <b className="block">{o.label}</b><span className="text-muted">{o.hint}</span>
               </button>
             ))}
@@ -101,7 +101,7 @@ export default function NewTask() {
             <Field label="Repeat"><select className={inputCls} value={repeat} disabled={kind === 'urgent'} onChange={e => setRepeat(e.target.value as 'none' | 'daily' | 'weekly')}><option value="none">Does not repeat</option><option value="daily">Daily</option><option value="weekly">Weekly</option></select></Field>
             {repeat !== 'none' && <Field label="Total occurrences (2-12)"><input type="number" min={2} max={12} className={inputCls} value={times} onChange={e => setTimes(Number(e.target.value))} /></Field>}
           </div>
-          <p className="mt-3 text-[11px] text-muted">A repeating task posts its next occurrence automatically after you approve the current one. Need several jobs in order? <Link className="font-bold text-forest-800 underline" href="/tasks/workflow">Build a linked workflow</Link>.</p>
+          <p className="mt-3 text-[11px] text-muted">A repeating task posts its next occurrence automatically after you approve the current one. Need several jobs in order? <Link className="font-bold text-brand-900 underline" href="/tasks/workflow">Build a linked workflow</Link>.</p>
         </Card>
         <Notice tone="green">The platform fee is {Math.round(k.db.fees.taskFeeRate * 100)}% and is taken from the provider&apos;s payout (about {kc(fee)} on {kc(f.budget)}). Your wallet balance is {kc(k.balance(me?.id ?? ''))}.</Notice>
         <div><Button type="submit">Publish task</Button></div>

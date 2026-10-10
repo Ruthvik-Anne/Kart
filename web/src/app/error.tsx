@@ -19,8 +19,8 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
         )}
         {error?.digest && <p className="mt-2 text-[11px] text-muted">Reference: {error.digest}</p>}
         <div className="mt-5 flex items-center justify-center gap-3">
-          <button onClick={reset} className="rounded-xl bg-forest-800 px-4 py-2.5 text-xs font-extrabold text-white hover:bg-forest-950">Try again</button>
-          <Link href="/" className="rounded-xl border border-[#dce7dc] bg-white px-4 py-2.5 text-xs font-extrabold text-forest-800 hover:bg-forest-100">Back to KART</Link>
+          <button onClick={reset} className="rounded-xl bg-brand-900 px-4 py-2.5 text-xs font-extrabold text-white hover:bg-brand-950">Try again</button>
+          <Link href="/" className="rounded-xl border border-[#dce7dc] bg-white px-4 py-2.5 text-xs font-extrabold text-brand-900 hover:bg-brand-50">Back to KART</Link>
         </div>
       </div>
     </main>

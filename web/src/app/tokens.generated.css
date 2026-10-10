@@ -14,7 +14,7 @@
   --color-x55715b: var(--x55715b);
   --color-x5c8862: var(--x5c8862);
   --color-x5d6f63: var(--x5d6f63);
-  --color-x5d8369: var(--x5d8369);
+  --color-brand-700: var(--brand-700);
   --color-x6b9b70: var(--x6b9b70);
   --color-x77907b: var(--x77907b);
   --color-x7b907e: var(--x7b907e);
@@ -22,7 +22,7 @@
   --color-x839389: var(--x839389);
   --color-x8a6a25: var(--x8a6a25);
   --color-x8b9b8e: var(--x8b9b8e);
-  --color-x9fd0a8: var(--x9fd0a8);
+  --color-brand-200: var(--brand-200);
   --color-xa66f1e: var(--xa66f1e);
   --color-xb42318: var(--xb42318);
   --color-xc46b48: var(--xc46b48);
@@ -31,7 +31,7 @@
   --color-xd6ddd4: var(--xd6ddd4);
   --color-xd7ead8: var(--xd7ead8);
   --color-xdce7db: var(--xdce7db);
-  --color-xdce7dc: var(--xdce7dc);
+  --color-brand-200: var(--brand-200);
   --color-xdcecdf: var(--xdcecdf);
   --color-xe1e9df: var(--xe1e9df);
   --color-xe3f3e6: var(--xe3f3e6);
@@ -42,9 +42,9 @@
   --color-xe9f1e7: var(--xe9f1e7);
   --color-xeaf0fb: var(--xeaf0fb);
   --color-xedf1eb: var(--xedf1eb);
-  --color-xeef1ed: var(--xeef1ed);
+  --color-surface-2: var(--surface-2);
   --color-xeff2ed: var(--xeff2ed);
-  --color-xf0f5eb: var(--xf0f5eb);
+  --color-surface-2: var(--surface-2);
   --color-xf0f5ec: var(--xf0f5ec);
   --color-xf1ddb0: var(--xf1ddb0);
   --color-xf3f7f1: var(--xf3f7f1);
@@ -55,11 +55,11 @@
   --color-xf9eace: var(--xf9eace);
   --color-xfafbf9: var(--xfafbf9);
   --color-xfde8e8: var(--xfde8e8);
-  --color-xfdf1f1: var(--xfdf1f1);
+  --color-danger-50: var(--danger-50);
   --color-xfff1d7: var(--xfff1d7);
   --color-xfff5dc: var(--xfff5dc);
   --color-xfff7e9: var(--xfff7e9);
-  --color-xfff8e8: var(--xfff8e8);
+  --color-surface-2: var(--surface-2);
   --color-xfffaf0: var(--xfffaf0);
 }
 :root {
@@ -77,7 +77,7 @@
   --x55715b: #55715b;
   --x5c8862: #5c8862;
   --x5d6f63: #5d6f63;
-  --x5d8369: #5d8369;
+  --brand-700: #5d8369;
   --x6b9b70: #6b9b70;
   --x77907b: #77907b;
   --x7b907e: #7b907e;
@@ -85,7 +85,7 @@
   --x839389: #839389;
   --x8a6a25: #8a6a25;
   --x8b9b8e: #8b9b8e;
-  --x9fd0a8: #9fd0a8;
+  --brand-200: #9fd0a8;
   --xa66f1e: #a66f1e;
   --xb42318: #b42318;
   --xc46b48: #c46b48;
@@ -94,7 +94,7 @@
   --xd6ddd4: #d6ddd4;
   --xd7ead8: #d7ead8;
   --xdce7db: #dce7db;
-  --xdce7dc: #dce7dc;
+  --brand-200: #dce7dc;
   --xdcecdf: #dcecdf;
   --xe1e9df: #e1e9df;
   --xe3f3e6: #e3f3e6;
@@ -105,9 +105,9 @@
   --xe9f1e7: #e9f1e7;
   --xeaf0fb: #eaf0fb;
   --xedf1eb: #edf1eb;
-  --xeef1ed: #eef1ed;
+  --surface-2: #eef1ed;
   --xeff2ed: #eff2ed;
-  --xf0f5eb: #f0f5eb;
+  --surface-2: #f0f5eb;
   --xf0f5ec: #f0f5ec;
   --xf1ddb0: #f1ddb0;
   --xf3f7f1: #f3f7f1;
@@ -118,11 +118,11 @@
   --xf9eace: #f9eace;
   --xfafbf9: #fafbf9;
   --xfde8e8: #fde8e8;
-  --xfdf1f1: #fdf1f1;
+  --danger-50: #fdf1f1;
   --xfff1d7: #fff1d7;
   --xfff5dc: #fff5dc;
   --xfff7e9: #fff7e9;
-  --xfff8e8: #fff8e8;
+  --surface-2: #fff8e8;
   --xfffaf0: #fffaf0;
 }
 [data-theme='dark'] {
@@ -140,7 +140,7 @@
   --x55715b: #94aa99;
   --x5c8862: #7fa184;
   --x5d6f63: #95a39a;
-  --x5d8369: #84a18d;
+  --brand-700: #84a18d;
   --x6b9b70: #6c9470;
   --x77907b: #758a78;
   --x7b907e: #758677;
@@ -148,7 +148,7 @@
   --x839389: #727f77;
   --x8a6a25: #d1b883;
   --x8b9b8e: #6a776c;
-  --x9fd0a8: #386240;
+  --brand-200: #386240;
   --xa66f1e: #d5aa6b;
   --xb42318: #d96860;
   --xc46b48: #b0674a;
@@ -157,7 +157,7 @@
   --xd6ddd4: #2b3129;
   --xd7ead8: #1c2f1d;
   --xdce7db: #202b1f;
-  --xdce7dc: #1f2a1f;
+  --brand-200: #1f2a1f;
   --xdcecdf: #1a2a1d;
   --xe1e9df: #1f271d;
   --xe3f3e6: #122416;
@@ -168,9 +168,9 @@
   --xe9f1e7: #172015;
   --xeaf0fb: #09111f;
   --xedf1eb: #171c15;
-  --xeef1ed: #161915;
+  --surface-2: #161915;
   --xeff2ed: #161a14;
-  --xf0f5eb: #161c10;
+  --surface-2: #161c10;
   --xf0f5ec: #151b10;
   --xf1ddb0: #524017;
   --xf3f7f1: #11160e;
@@ -181,10 +181,10 @@
   --xf9eace: #38290d;
   --xfafbf9: #12150f;
   --xfde8e8: #210606;
-  --xfdf1f1: #1d0707;
+  --danger-50: #1d0707;
   --xfff1d7: #312205;
   --xfff5dc: #2c2105;
   --xfff7e9: #211604;
-  --xfff8e8: #221904;
+  --surface-2: #221904;
   --xfffaf0: #201704;
 }

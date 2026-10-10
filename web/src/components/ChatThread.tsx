@@ -6,7 +6,7 @@ import { useKart } from '@/mock/StoreProvider';
 import { AttachmentList, FilePicker } from '@/components/FilePicker';
 import { Button, Field, inputCls, cx, kc, when } from '@/components/ui';
 
-const QUOTE_TONE = { pending: 'border-amber-kart bg-xfff8e8', accepted: 'border-x9fd0a8 bg-forest-100', declined: 'border-xe5c0c0 bg-xfdf1f1', superseded: 'border-line bg-xf6f6f4 opacity-70', expired: 'border-line bg-xf6f6f4 opacity-70' } as const;
+const QUOTE_TONE = { pending: 'border-amber-kart bg-surface-2', accepted: 'border-brand-200 bg-brand-50', declined: 'border-xe5c0c0 bg-danger-50', superseded: 'border-line bg-xf6f6f4 opacity-70', expired: 'border-line bg-xf6f6f4 opacity-70' } as const;
 
 /** One private conversation: the poster and a single bidder. Messages render as plain text (escaped by React). */
 export function ChatThread({ threadKey, readOnly, otherName, canNegotiate }: { threadKey: string; readOnly?: boolean; otherName: string; canNegotiate?: boolean }) {

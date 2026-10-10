@@ -19,7 +19,7 @@ export default function ProviderHub() {
 
   return (
     <>
-      <CampusHeader campusId={me.campusId} kicker="PROVIDER HUB" role="Provider" title={`Your work, ${me.name.split(' ')[0]}`} sub="Jobs in progress, pending bids, payouts and reputation across your campus." actions={<Link href="/tasks" className="rounded-xl bg-[#eeac54] px-4 py-2.5 text-xs font-extrabold text-forest-950">Find tasks</Link>} />
+      <CampusHeader campusId={me.campusId} kicker="PROVIDER HUB" role="Provider" title={`Your work, ${me.name.split(' ')[0]}`} sub="Jobs in progress, pending bids, payouts and reputation across your campus." actions={<Link href="/tasks" className="rounded-xl bg-[#eeac54] px-4 py-2.5 text-xs font-extrabold text-brand-950">Find tasks</Link>} />
       <StatGrid>
         <Stat label="Total earned" value={kc(earned)} note="After platform fees" />
         <Stat label="Coming from escrow" value={kc(inEscrow)} note="Released as milestones are approved" />

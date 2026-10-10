@@ -21,7 +21,7 @@ export default function Disputes() {
                   <p className="mt-2 text-xs">&ldquo;{t.disputeReason}&rdquo;</p>
                 </div>
                 <div className="text-right"><Badge tone="red">{kc(k.ledger.balance(`TASK_ESCROW:${t.id}`))} frozen</Badge><br />
-                  <Link className="mt-2 inline-block text-[11px] font-extrabold text-forest-800" href={`/tasks/${t.id}`}>Review & decide →</Link></div>
+                  <Link className="mt-2 inline-block text-[11px] font-extrabold text-brand-900" href={`/tasks/${t.id}`}>Review & decide →</Link></div>
               </div>
             </Card>
           ))}

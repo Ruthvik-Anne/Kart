@@ -24,7 +24,7 @@ export default function Notifications() {
             <li key={n.id} className={cx('flex items-center gap-3 rounded-2xl border bg-surface p-4 text-xs', n.read ? 'border-line' : 'border-amber-kart bg-xfffaf0')}>
               <span aria-hidden className={cx('h-2 w-2 flex-none rounded-full', n.read ? 'bg-transparent' : 'bg-amber-kart')} />
               <div className="min-w-0 flex-1"><b className="block">{n.text}</b><span className="text-[10px] text-muted">{when(n.ts)}</span></div>
-              {n.href && <Link href={n.href} onClick={() => act(kart => kart.markNotificationRead(me, n.id))} className="rounded-xl border border-xdce7dc px-3 py-1.5 font-extrabold text-forest-800 hover:bg-forest-100">Open →</Link>}
+              {n.href && <Link href={n.href} onClick={() => act(kart => kart.markNotificationRead(me, n.id))} className="rounded-xl border border-brand-200 px-3 py-1.5 font-extrabold text-brand-900 hover:bg-brand-50">Open →</Link>}
               {!n.read && <button className="font-bold text-x55715b underline" onClick={() => act(kart => kart.markNotificationRead(me, n.id))}>Mark read</button>}
             </li>
           ))}

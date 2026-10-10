@@ -30,12 +30,12 @@ export function VendorOrders({ print }: { print?: boolean }) {
             <Card key={o.id} data-order-card={o.id} className="!p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-x5d8369">{o.id} · {when(o.ts)} · {k.user(o.buyerId)?.name}</div>
+                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-brand-700">{o.id} · {when(o.ts)} · {k.user(o.buyerId)?.name}</div>
                   <h3 className="mt-1 text-sm font-bold">{o.title}</h3>
                   <div className="text-[11px] text-muted">{kc(o.amount)} paid from wallet{o.window ? ` · ${o.fulfillment === 'delivery' ? 'delivery' : 'pickup'} ${o.window}` : ''}</div>
-                  {o.deliveryDetails && <div className="mt-1 text-[11px] font-bold text-forest-800">Delivery: {o.deliveryDetails}</div>}
+                  {o.deliveryDetails && <div className="mt-1 text-[11px] font-bold text-brand-900">Delivery: {o.deliveryDetails}</div>}
                   <AttachmentList files={o.files} />
-                  {print && o.files?.length ? <div className="mt-2 flex flex-wrap gap-2">{o.files.map(file => <a key={file.id} href={`/api/print/file?id=${encodeURIComponent(file.id)}`} download className="rounded-lg bg-forest-100 px-2 py-1 text-[11px] font-bold text-forest-800 underline">Download {file.name}</a>)}</div> : null}
+                  {print && o.files?.length ? <div className="mt-2 flex flex-wrap gap-2">{o.files.map(file => <a key={file.id} href={`/api/print/file?id=${encodeURIComponent(file.id)}`} download className="rounded-lg bg-brand-50 px-2 py-1 text-[11px] font-bold text-brand-900 underline">Download {file.name}</a>)}</div> : null}
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge tone={o.status === 'Cancelled' ? 'red' : o.status === 'Ready' ? 'amber' : o.status === 'Collected' ? 'gray' : 'green'}>{o.status}</Badge>
@@ -43,19 +43,19 @@ export function VendorOrders({ print }: { print?: boolean }) {
                 </div>
               </div>
               {needsRunner && (
-                <p className="mt-3 border-t border-line pt-3 text-xs font-bold text-forest-800">
+                <p className="mt-3 border-t border-line pt-3 text-xs font-bold text-brand-900">
                   <Badge tone="amber">Waiting for a delivery runner</Badge>
                 </p>
               )}
               {withRunner && (
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
-                  <span className="text-xs font-bold text-forest-800">{k.user(o.runnerId!)?.name} is collecting this order</span>
+                  <span className="text-xs font-bold text-brand-900">{k.user(o.runnerId!)?.name} is collecting this order</span>
                   <Button size="sm" onClick={() => act(kart => kart.handoverToRunner(me, o.id), `Order ${o.id} handed to the runner`)}>Hand to runner</Button>
                 </div>
               )}
               {o.status === 'Ready' && o.handoverCode && o.fulfillment !== 'delivery' && (
                 <form className="mt-4 flex flex-wrap items-end gap-2 border-t border-line pt-4" onSubmit={async e => { e.preventDefault(); const result = await act(kart => kart.verifyHandover(me, o.id, codes[o.id] ?? ''), 'Handover confirmed'); if (result.ok) setCodes(current => ({ ...current, [o.id]: '' })); }}>
-                  <label className="text-xs font-bold text-forest-800">Customer handover code
+                  <label className="text-xs font-bold text-brand-900">Customer handover code
                     <input required maxLength={8} autoComplete="off" data-handover-input value={codes[o.id] ?? ''} onChange={e => setCodes(current => ({ ...current, [o.id]: e.target.value.toUpperCase() }))} className="mt-1 block rounded-xl border border-line px-3 py-2 font-mono uppercase tracking-widest" placeholder="8-character code" />
                   </label>
                   <Button type="submit" size="sm">Confirm handover</Button>

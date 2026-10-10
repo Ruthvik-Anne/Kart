@@ -27,7 +27,7 @@ export default function Messages() {
           <div className="grid content-start gap-2" role="list">
             {keys.map(x => (
               <button key={x.key} role="listitem" onClick={() => setSel(x.key)}
-                className={cx('rounded-xl border p-3 text-left text-xs', current?.key === x.key ? 'border-forest-800 bg-forest-100' : 'border-line bg-surface')}>
+                className={cx('rounded-xl border p-3 text-left text-xs', current?.key === x.key ? 'border-brand-900 bg-brand-50' : 'border-line bg-surface')}>
                 <b className="block truncate">{x.t.title}</b>
                 <span className="text-muted">{x.other}{x.closed ? ' · closed' : ''}</span>
                 <span className="mt-1 block truncate text-[11px] text-x4c6354">{x.last ? x.last.body : 'No messages yet'}</span>
@@ -39,7 +39,7 @@ export default function Messages() {
             <Card>
               <div className="mb-3 flex items-center justify-between">
                 <div><b className="font-display text-base">{current.other}</b><div className="text-[11px] text-muted">{current.t.title}</div></div>
-                <Link className="text-[11px] font-extrabold text-forest-800" href={`/tasks/${current.t.id}`}>Open task →</Link>
+                <Link className="text-[11px] font-extrabold text-brand-900" href={`/tasks/${current.t.id}`}>Open task →</Link>
               </div>
               <ChatThread key={current.key} threadKey={current.key} otherName={current.other} canNegotiate={['open', 'bidding'].includes(current.t.status) && !current.closed && !k.isLocked(current.t)} readOnly={current.closed || ['completed', 'cancelled', 'resolved'].includes(current.t.status)} />
             </Card>

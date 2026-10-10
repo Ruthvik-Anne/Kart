@@ -29,12 +29,12 @@ const sections: { id: Tab; label: string }[] = [
 const field = (form: HTMLFormElement, name: string) => String(new FormData(form).get(name) ?? '').trim();
 const numeric = (form: HTMLFormElement, name: string) => Number(field(form, name));
 const dateSeconds = (form: HTMLFormElement, name: string) => Math.floor(new Date(field(form, name)).getTime() / 1000);
-const inputClass = 'w-full rounded-lg border border-[#d7e2d6] bg-white px-3 py-2 text-sm text-forest-950';
-const buttonClass = 'rounded-lg bg-forest-800 px-3 py-2 text-xs font-bold text-white hover:bg-forest-950 disabled:opacity-50';
+const inputClass = 'w-full rounded-lg border border-[#d7e2d6] bg-white px-3 py-2 text-sm text-brand-950';
+const buttonClass = 'rounded-lg bg-brand-900 px-3 py-2 text-xs font-bold text-white hover:bg-brand-950 disabled:opacity-50';
 
 function Card({ children, title }: { children: ReactNode; title?: string }) {
   return <section className="rounded-2xl border border-[#dfe8df] bg-white p-5 shadow-sm">
-    {title && <h2 className="mb-3 font-display text-lg font-bold text-forest-950">{title}</h2>}{children}
+    {title && <h2 className="mb-3 font-display text-lg font-bold text-brand-950">{title}</h2>}{children}
   </section>;
 }
 function Button({ children, onClick, disabled }: { children: ReactNode; onClick: () => void; disabled?: boolean }) {
@@ -168,7 +168,7 @@ export default function LiveWorkspace() {
 
   if (!loaded) return null;
   if (!session) return <main className="mx-auto max-w-xl px-5 py-16">
-    {demoMode && <a href="/login" className="text-sm text-forest-800">← Existing prototype</a>}
+    {demoMode && <a href="/login" className="text-sm text-brand-900">← Existing prototype</a>}
     <h1 className="mt-8 font-display text-4xl font-extrabold">KART connected workspace</h1>
     <p className="mt-3 text-sm text-muted">Persistent campus workflows through the FastAPI backend. Demo identities and KC have no monetary value.</p>
     {demoMode === false && <div className="mt-8 rounded-2xl bg-white p-6 shadow-sm">
@@ -213,10 +213,10 @@ export default function LiveWorkspace() {
   };
   return <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
     <header className="flex flex-wrap items-center justify-between gap-4">
-      <div>{demoMode && <a href="/login" className="text-xs text-forest-700">← Prototype</a>}
+      <div>{demoMode && <a href="/login" className="text-xs text-brand-700">← Prototype</a>}
         <h1 className="font-display text-3xl font-extrabold tracking-tight">KART · Live workspace</h1>
         <p className="text-xs text-muted">{session.name} · {session.campus} · demo KC only</p></div>
-      <div className="flex items-center gap-3"><strong className="rounded-xl bg-forest-100 px-4 py-2 text-sm">{balance.available} KC</strong>
+      <div className="flex items-center gap-3"><strong className="rounded-xl bg-brand-50 px-4 py-2 text-sm">{balance.available} KC</strong>
         <button className="text-xs underline" onClick={() => {
           if (!demoMode) void backend('auth/logout', undefined, {}).catch(() => setNotice('Sign out failed; retry.'));
           localStorage.removeItem('kart-live-session'); setCsrfToken(''); setSession(null);
@@ -226,7 +226,7 @@ export default function LiveWorkspace() {
       Campus sign-in is active. KC transfers and paid actions are disabled until the payment integration is approved.
     </p>}
     <nav className="my-7 flex flex-wrap gap-2" aria-label="Workspace sections">{sections.map(section =>
-      <button key={section.id} className={`rounded-full px-4 py-2 text-xs font-bold ${tab === section.id ? 'bg-forest-800 text-white' : 'bg-white text-forest-800'}`}
+      <button key={section.id} className={`rounded-full px-4 py-2 text-xs font-bold ${tab === section.id ? 'bg-brand-900 text-white' : 'bg-white text-brand-900'}`}
         onClick={() => setTab(section.id)}>{section.label}</button>)}</nav>
     {notice && <p role="status" className="mb-5 rounded-xl bg-[#fff2d7] px-4 py-3 text-sm">{notice}</p>}
 
@@ -253,7 +253,7 @@ export default function LiveWorkspace() {
           <label className="text-xs"><input type="checkbox" name="anonymous" /> Post anonymously</label><FormButton>Publish task</FormButton>
         </form></Card>
         <Card title="Campus task board"><div className="grid gap-2">{tasks.map(task =>
-          <button key={task.id} className="rounded-xl border border-line p-3 text-left hover:bg-forest-100" onClick={() => void openTask(task)}>
+          <button key={task.id} className="rounded-xl border border-line p-3 text-left hover:bg-brand-50" onClick={() => void openTask(task)}>
             <div className="flex justify-between gap-2"><strong>{task.title}</strong><span className="text-sm font-bold">{task.budget} KC</span></div>
             <p className="text-xs text-muted">{task.poster_alias ?? (mine(task) ? 'Your task' : 'Campus student')} · {task.urgency} · {task.status}</p>
           </button>)}{!tasks.length && <p className="text-sm text-muted">No tasks yet.</p>}</div></Card>
@@ -269,7 +269,7 @@ export default function LiveWorkspace() {
         {mine(current) && current.status === 'open' && <div><h3 className="mb-2 text-sm font-bold">Bids</h3>
           {recommendations?.estimate_minutes && <p className="mb-3 text-xs text-muted">Estimated duration {recommendations.estimate_minutes.low}–{recommendations.estimate_minutes.high} min · {recommendations.confidence} confidence. Ranking is advisory.</p>}
           {bids.map(bid =>
-          <div key={bid.id} className="mb-2 flex flex-wrap items-center gap-2 rounded-lg bg-forest-100 p-3 text-xs">
+          <div key={bid.id} className="mb-2 flex flex-wrap items-center gap-2 rounded-lg bg-brand-50 p-3 text-xs">
             <span>{bid.bidder_id.slice(0, 8)} · {bid.amount} KC · {bid.eta_minutes} min · {bid.note}
               {recommendations?.ranked.find(r => r.bid_id === bid.id) && ` · Score ${recommendations.ranked.find(r => r.bid_id === bid.id)?.score} (${recommendations.ranked.find(r => r.bid_id === bid.id)?.reason})`}</span>
             <Button disabled={!demoMode} onClick={() => void run(`v1/tasks/${current.id}/bids/${bid.id}/accept`, {}, 'Worker assigned').then(() => void openTask(current))}>Accept</Button>
@@ -286,7 +286,7 @@ export default function LiveWorkspace() {
         </div>
         {(messages.length > 0 || current.status !== 'open' || bidderThread) && <div className="mt-6 border-t border-line pt-4">
           <h3 className="font-bold">Private conversation</h3>
-          <div className="my-3 max-h-64 space-y-2 overflow-auto">{messages.map(m => <p key={m.id} className="rounded-lg bg-forest-100 p-2 text-sm"><strong className="mr-2 text-xs">{m.sender_id === session.id ? 'You' : m.sender_id === 'anonymous-poster' ? 'Anonymous poster' : 'Participant'}</strong>{m.body}</p>)}</div>
+          <div className="my-3 max-h-64 space-y-2 overflow-auto">{messages.map(m => <p key={m.id} className="rounded-lg bg-brand-50 p-2 text-sm"><strong className="mr-2 text-xs">{m.sender_id === session.id ? 'You' : m.sender_id === 'anonymous-poster' ? 'Anonymous poster' : 'Participant'}</strong>{m.body}</p>)}</div>
           <form className="flex gap-2" onSubmit={event => { event.preventDefault(); const form = event.currentTarget;
             void run(`v1/tasks/${current.id}/messages`, { body: field(form, 'body'), bidder_id: bidderThread || null }, 'Message sent')
               .then(() => { form.reset(); if (bidderThread) void loadThread(current.id, bidderThread); else void openTask(current); }); }}>
@@ -375,7 +375,7 @@ export default function LiveWorkspace() {
             </div>)}{!campusUsers.length && <p className="text-xs text-muted">No student accounts yet.</p>}</div></Card>}
       </div>
       <div className="grid content-start gap-5"><Card title="Your shop management">
-        {myStores.map(org => <div key={org.id} className="mb-4 rounded-xl bg-forest-100 p-3">
+        {myStores.map(org => <div key={org.id} className="mb-4 rounded-xl bg-brand-50 p-3">
           <strong>{org.name}</strong><p className="mb-2 text-xs text-muted">{org.store_type} · Store ID {org.store_id}</p>
           <form className="grid gap-2" onSubmit={submit(`v1/stores/${org.store_id}/products`, form => ({
             name: field(form, 'name'), description: field(form, 'description'),
@@ -420,7 +420,7 @@ export default function LiveWorkspace() {
           {listing.status === 'active' && listing.seller_id === session.id &&
             <Button onClick={() => void run(`v1/listings/${listing.id}/actions/withdraw`, {}, 'Listing withdrawn')}>Withdraw</Button>}</div>
         </div>)}{!listings.length && <p className="text-sm text-muted">No student listings yet.</p>}</div></Card>
-        <Card title="Your rentals"><div className="grid gap-2">{rentals.map(rental => <div key={rental.id} className="rounded-xl bg-forest-100 p-3 text-sm">
+        <Card title="Your rentals"><div className="grid gap-2">{rentals.map(rental => <div key={rental.id} className="rounded-xl bg-brand-50 p-3 text-sm">
           <strong>{listings.find(l => l.id === rental.listing_id)?.title ?? 'Rental'}</strong> · {rental.status}
           <p className="text-xs text-muted">Fee {rental.fee} KC · deposit {rental.deposit} KC {rental.due_at > 0 && `· return ${new Date(rental.due_at * 1000).toLocaleDateString()}`}</p>
           <div className="mt-2 flex flex-wrap gap-2">
@@ -447,7 +447,7 @@ export default function LiveWorkspace() {
           {s.provider_id !== session.id && <div className="mt-2"><Button disabled={!demoMode} onClick={() => void run(`v1/services/${s.id}/book`, {}, 'Booking requested and KC reserved')}>Book service</Button></div>}
         </div>)}{!services.length && <p className="text-sm text-muted">No services yet.</p>}</div></Card>
         <Card title="Bookings"><div className="grid gap-2">{bookings.map(booking =>
-          <div key={booking.id} className="rounded-xl bg-forest-100 p-3 text-sm">
+          <div key={booking.id} className="rounded-xl bg-brand-50 p-3 text-sm">
             <strong>{services.find(s => s.id === booking.service_id)?.title ?? 'Service'}</strong> · {booking.status}
             <div className="mt-2 flex flex-wrap gap-2">
               {booking.provider_id === session.id && booking.status === 'requested' && <Button onClick={() => void run(`v1/bookings/${booking.id}/actions/start`, {}, 'Work started')}>Start</Button>}
@@ -486,7 +486,7 @@ export default function LiveWorkspace() {
           <p className="my-2 text-xs text-muted">{new Date(event.starts_at * 1000).toLocaleString()} · {event.price} KC · {event.reserved_seats}/{event.capacity} seats</p>
           <Button disabled={event.reserved_seats >= event.capacity || (!demoMode && event.price > 0)} onClick={() => void run(`v1/events/${event.id}/register`, {}, 'Ticket issued')}>Register</Button>
         </div>)}{!events.length && <p className="text-sm text-muted">No events published yet.</p>}</div></Card>
-        <Card title="Your tickets"><div className="grid gap-2">{tickets.map(ticket => <div key={ticket.id} className="rounded-lg bg-forest-100 p-3 text-sm">
+        <Card title="Your tickets"><div className="grid gap-2">{tickets.map(ticket => <div key={ticket.id} className="rounded-lg bg-brand-50 p-3 text-sm">
           <strong>{ticket.title}</strong> · {ticket.status}<p className="mt-1 break-all font-mono text-xs">Ticket {ticket.id} · code {ticket.code}</p>
         </div>)}{!tickets.length && <p className="text-sm text-muted">No tickets yet.</p>}</div></Card>
         {clubs.length > 0 && <Card title="Event gate"><form className="grid gap-2" onSubmit={event => {
@@ -543,7 +543,7 @@ function PrintQueue({ storeId, token, run }: {
   const [jobs, setJobs] = useState<PrintJob[]>([]);
   const load = useCallback(() => { void backend<PrintJob[]>(`v1/print-jobs?store_id=${storeId}`, token).then(setJobs).catch(() => setJobs([])); }, [storeId, token]);
   useEffect(() => { load(); }, [load]);
-  return <div className="grid gap-2">{jobs.map(job => <div key={job.id} className="rounded-lg bg-forest-100 p-3 text-sm">
+  return <div className="grid gap-2">{jobs.map(job => <div key={job.id} className="rounded-lg bg-brand-50 p-3 text-sm">
     <strong>{job.file_name}</strong> · {job.status}
     {['placed', 'preparing', 'ready'].includes(job.status) && <form className="mt-2 flex gap-2" onSubmit={event => {
       event.preventDefault(); const form = event.currentTarget;

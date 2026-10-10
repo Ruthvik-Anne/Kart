@@ -61,7 +61,7 @@ export default function AdminOverview() {
       <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-5">
         {tools.map(item => (
           <Link key={item.href} href={item.href} className="rounded-2xl border border-line bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-lg">
-            <div className="mb-2.5 grid h-10 w-10 place-items-center rounded-xl bg-forest-100 text-xl" aria-hidden>{item.icon}</div>
+            <div className="mb-2.5 grid h-10 w-10 place-items-center rounded-xl bg-brand-50 text-xl" aria-hidden>{item.icon}</div>
             <strong className="block font-display text-sm">{item.label}</strong>
           </Link>
         ))}

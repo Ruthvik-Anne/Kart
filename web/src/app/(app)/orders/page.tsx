@@ -27,7 +27,7 @@ export default function Orders() {
               <Card key={o.id}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <div className="text-[10px] font-extrabold uppercase tracking-wider text-x5d8369">{o.id} · {when(o.ts)}</div>
+                    <div className="text-[10px] font-extrabold uppercase tracking-wider text-brand-700">{o.id} · {when(o.ts)}</div>
                     <h3 className="mt-1 font-display text-base font-bold">{o.title}</h3>
                     <div className="text-[11px] text-muted">{k.store(o.storeId)?.name}{o.window ? ` · ${o.window}` : ''} · {kc(o.amount)} paid from wallet</div>
                   </div>
@@ -42,12 +42,12 @@ export default function Orders() {
                       storeName={k.store(o.storeId)?.name} kind={o.kind} fulfillment={o.fulfillment}
                       window={o.window} deliveryDetails={o.deliveryDetails} amount={o.amount} />
                     {o.fulfillment === 'delivery' && o.status === 'Out for delivery' && (
-                      <p className="mt-3 text-xs font-bold text-forest-800">Your delivery runner is on the way — hand over the code above to receive the order.</p>
+                      <p className="mt-3 text-xs font-bold text-brand-900">Your delivery runner is on the way — hand over the code above to receive the order.</p>
                     )}
                   </div>
                 )}
                 <AttachmentList files={o.files} />
-                {o.kind === 'print' && o.files?.length ? <div className="mt-2 flex flex-wrap gap-2">{o.files.map(file => <a key={file.id} href={`/api/print/file?id=${encodeURIComponent(file.id)}`} download className="text-[11px] font-bold text-forest-800 underline">Download {file.name}</a>)}</div> : null}
+                {o.kind === 'print' && o.files?.length ? <div className="mt-2 flex flex-wrap gap-2">{o.files.map(file => <a key={file.id} href={`/api/print/file?id=${encodeURIComponent(file.id)}`} download className="text-[11px] font-bold text-brand-900 underline">Download {file.name}</a>)}</div> : null}
                 {o.status === 'Collected' && (k.db.reviews.find(r => r.kind === 'order' && r.refId === o.id)
                   ? <div className="mt-3 flex items-center gap-2 text-xs"><span className="text-muted">Your review</span><StarRating value={k.db.reviews.find(r => r.kind === 'order' && r.refId === o.id)!.rating} /></div>
                   : <div className="mt-3"><Button size="sm" variant="secondary" onClick={() => { setReviewing(o.id); setStars(5); setComment(''); }}>★ Rate {k.store(o.storeId)?.name}</Button></div>)}
