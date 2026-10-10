@@ -43,7 +43,8 @@ function visibleState(state: Db, user: User): Db {
     notifications: state.notifications.filter(n => n.userId === user.id),
     orders: state.orders.filter(o => admin || o.buyerId === user.id || o.storeId === user.storeId
       || (user.roles.includes('student') && deliveryBoard(o)))
-      .map(o => o.buyerId === user.id ? o : { ...o, handoverCode: undefined }),
+      .map(o => o.buyerId === user.id ? o : { ...o, handoverCode: undefined,
+        files: o.storeId === user.storeId ? o.files : undefined }),
     tickets: state.tickets.filter(t => admin || t.userId === user.id),
     verifications: state.verifications.filter(v => admin || v.userId === user.id),
     workflows: state.workflows.filter(w => admin || w.ownerId === user.id),

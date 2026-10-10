@@ -15,6 +15,7 @@ interface Ctx {
   act: <T extends object>(fn: (k: Kart, me: User) => Result<T> | Promise<Result<T>>, okText?: string) => Promise<Result<T>>;
   /** Load state after the auth server establishes a session. */
   adopt: (user: User) => void;
+  refresh: () => Promise<void>;
   signOut: () => void;
   toasts: Toast[];
 }
@@ -113,7 +114,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setVersion(v => v + 1);
   }, []);
 
-  const value: Ctx = { ready, k: kart.current, me, version, act, adopt: adoptUser, signOut, toasts };
+  const refresh = useCallback(async () => {
+    const user = kart.current.user(sessionId ?? '');
+    if (user) await loadState(user);
+  }, [loadState, sessionId]);
+
+  const value: Ctx = { ready, k: kart.current, me, version, act, adopt: adoptUser, refresh, signOut, toasts };
   return (
     <StoreCtx.Provider value={value}>
       {children}

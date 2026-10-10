@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation';
 import { Shell } from '@/components/Shell';
 import { currentUser } from '@/server/auth';
 
+export const dynamic = 'force-dynamic';
+
 /** Server-side session guard for every app route (proxy already checks; this protects RSC output too). */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   let signedIn = false;

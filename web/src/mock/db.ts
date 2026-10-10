@@ -234,6 +234,7 @@ export class Kart {
     const order = this.db.orders.find(o => o.id === orderId);
     if (!order || !can(actor, 'store:orders:update', { storeId: order.storeId })) return fail('Order not found.');
     if (order.status !== 'Ready') return fail('Mark the order ready before handover.');
+    if (order.fulfillment === 'delivery') return fail('The delivery runner must confirm this order at the customer location.');
     if (!order.handoverCode || code.trim().toUpperCase() !== order.handoverCode) return fail('The handover code does not match.');
     order.status = 'Collected';
     this.notify(order.buyerId, `Order ${order.id} was handed over`, '/orders');
@@ -281,27 +282,34 @@ export class Kart {
     return { ok: true, orderId: id, code: handoverCode };
   }
 
-  placePrintOrder(actor: User, storeId: string, p: { doc: string; pages: number; copies: number; color: boolean; duplex: boolean; spiral: boolean; fulfillment: 'pickup' | 'delivery'; deliveryDetails?: string }, files: Attachment[]): Result<{ orderId: string }> {
+  placePrintOrder(actor: User, storeId: string, p: PrintSpec, files: Attachment[]): Result<{ orderId: string; code: string }> {
     if (!can(actor, 'print:create')) return fail('Not allowed.');
     const store = this.store(storeId);
     if (!store || store.type !== 'xerox' || !store.open) return fail('Choose an open print shop.');
     if (!p.doc?.trim() || p.doc.length > 80) return fail('Enter a document name (up to 80 characters).');
     if (![p.pages, p.copies].every(Number.isInteger) || p.pages < 1 || p.pages > 500 || p.copies < 1 || p.copies > 20) return fail('Pages 1–500, copies 1–20.');
+    const paper = p.paper ?? 'A4';
+    const binding = p.binding ?? (p.spiral ? 'spiral' : 'none');
+    const lamination = p.lamination ?? 'none';
+    if (!(paper in PAPER_RATES) || !(binding in BINDING_COST) || !(lamination in LAMINATION_COST)) return fail('Choose valid print options.');
+    if (!p.fulfillment || !['pickup', 'delivery'].includes(p.fulfillment)) return fail('Choose pickup or delivery.');
     if (p.fulfillment === 'delivery' && (!p.deliveryDetails?.trim() || p.deliveryDetails.length > 200)) return fail('Enter delivery instructions.');
+    if (p.window && p.window.length > 80) return fail('Choose a pickup or delivery time.');
+    if ((p.notes ?? '').length > 300) return fail('Keep print instructions under 300 characters.');
     if (!files.length || files.length > MAX_FILES) return fail('Attach at least one document.');
     const sheets = p.duplex ? Math.ceil(p.pages / 2) : p.pages;
-    const amount = sheets * p.copies * (p.color ? 8 : 2) + (p.spiral ? 30 : 0);
+    const amount = Math.round(sheets * p.copies * (p.color ? 8 : 2) * PAPER_RATES[paper]) + BINDING_COST[binding] + LAMINATION_COST[lamination];
     if (this.balance(actor.id) < amount) return fail('Not enough KC in your wallet for this print job. Top up your wallet first.');
     const id = this.id('PRT');
     const handoverCode = newCode();
     const paid = this.post(rules.checkout(id, actor.id, store.vendorId, amount, this.db.fees));
     if (paid) return fail(paid);
     this.db.orders.unshift({ id, buyerId: actor.id, storeId, kind: 'print', amount, status: 'Placed', ts: Date.now(),
-      files, fulfillment: p.fulfillment, deliveryDetails: p.fulfillment === 'delivery' ? p.deliveryDetails?.trim() : undefined,
+      files, window: p.window, fulfillment: p.fulfillment, deliveryDetails: p.fulfillment === 'delivery' ? p.deliveryDetails?.trim() : undefined,
       paymentMethod: 'wallet', handoverCode,
       title: `Print: ${p.doc.trim()} (${p.pages} pages × ${p.copies} copies${p.color ? ', colour' : ''}${p.duplex ? ', duplex' : ''}${p.spiral ? ', spiral' : ''})` });
     this.notify(store.vendorId, `New print job ${id}`, '/vendor/print-queue');
-    return { ok: true, orderId: id };
+    return { ok: true, orderId: id, code: handoverCode };
   }
 
   advanceOrder(actor: User, orderId: string): Result {

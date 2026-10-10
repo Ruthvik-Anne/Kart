@@ -25,6 +25,10 @@ export async function POST(req: NextRequest) {
     const spec = {
       doc: String(form.get('doc') ?? ''), pages: Number(form.get('pages')), copies: Number(form.get('copies')),
       color: form.get('color') === 'true', duplex: form.get('duplex') === 'true', spiral: form.get('spiral') === 'true',
+      paper: String(form.get('paper') ?? 'A4') as 'A4' | 'A3' | 'Legal' | 'Letter',
+      binding: String(form.get('binding') ?? 'none') as 'none' | 'staple' | 'comb' | 'spiral',
+      lamination: String(form.get('lamination') ?? 'none') as 'none' | 'normal' | 'id',
+      notes: String(form.get('notes') ?? ''), window: String(form.get('window') ?? ''),
       fulfillment: form.get('fulfillment') === 'delivery' ? 'delivery' as const : 'pickup' as const,
       deliveryDetails: String(form.get('deliveryDetails') ?? ''),
     };
