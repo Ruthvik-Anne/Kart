@@ -1,34 +1,185 @@
 @import 'tailwindcss';
 @import './tokens.generated.css';
 
+/* ─── KART design system ─────────────────────────────────────────────────────
+   Primary palette (user-supplied):
+     #123F36  deep forest (darkest brand green)
+     #2A6B5C  mid teal
+     #C49A45  gold / amber accent
+     #E8DCC4  warm beige / cream
+   ─────────────────────────────────────────────────────────────────────────── */
+
 @theme {
   --font-sans: var(--font-dm-sans), system-ui, sans-serif;
   --font-display: var(--font-outfit), system-ui, sans-serif;
+
+  /* semantic aliases */
   --color-ink: var(--ink);
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
-  --color-forest-950: #102c24;
-  --color-forest-800: var(--forest-800);
-  --color-forest-700: var(--forest-700);
-  --color-forest-100: var(--forest-100);
-  --color-amber-kart: #f4a84c;
+  --color-surface-2: var(--surface-2);
   --color-line: var(--line);
   --color-muted: var(--muted);
+  --color-muted-2: var(--muted-2);
+
+  /* brand greens (light) */
+  --color-brand-950: #0c2d24;
+  --color-brand-900: #123f36;
+  --color-brand-800: #1a5446;
+  --color-brand-700: #2a6b5c;
+  --color-brand-600: #3a8a72;
+  --color-brand-500: #4aac90;
+  --color-brand-200: #a8d8cc;
+  --color-brand-100: #d4ece7;
+  --color-brand-50:  #eaf5f2;
+
+  /* gold / amber */
+  --color-gold-700: #9a7434;
+  --color-gold-600: #b88c3e;
+  --color-gold-500: #c49a45;
+  --color-gold-400: #d4ae63;
+  --color-gold-100: #f5ecd1;
+  --color-gold-50:  #fdf7eb;
+
+  /* beige / cream */
+  --color-cream-900: #8a7b62;
+  --color-cream-300: #d4c4a5;
+  --color-cream-200: #e8dcc4;
+  --color-cream-100: #f2ece0;
+  --color-cream-50:  #faf7f0;
+
+  /* semantic status */
+  --color-success-700: #2a6b5c;
+  --color-success-100: #d4ece7;
+  --color-warning-700: #9a7434;
+  --color-warning-100: #fdf0d0;
+  --color-danger-700: #b42318;
+  --color-danger-100: #fde8e8;
+  --color-info-700: #3b6fb5;
+  --color-info-100: #dde9fc;
+
+  /* legacy kept for test compatibility */
+  --color-brand-950: #0c2d24;
+  --color-brand-900: var(--brand-900);
+  --color-brand-700: var(--brand-700);
+  --color-brand-50: var(--brand-50);
+  --color-amber-kart: var(--amber-kart);
+  --color-amber-kart-dark: #a87e2e;
+  --color-brand-900-static: var(--brand-900);
 }
 
+/* ── Light mode ──────────────────────────────────────────────────────────── */
 :root {
   color-scheme: light;
-  --ink: #1b3029; --canvas: #f5f7f2; --surface: #ffffff;
-  --forest-800: #204a39; --forest-700: #285143; --forest-100: #eaf4ec;
-  --line: #e6ece5; --muted: #728579;
-}
-[data-theme='dark'] {
-  color-scheme: dark;
-  --ink: #e3ece6; --canvas: #0d1612; --surface: #15221c;
-  --forest-800: #3f8f68; --forest-700: #3a7d5e; --forest-100: #1d3128;
-  --line: #27392f; --muted: #93a79b;
+
+  /* base tokens */
+  --ink:       #123f36;
+  --canvas:    #f2ece0;
+  --surface:   #ffffff;
+  --surface-2: #faf7f0;
+  --line:      #e2d8c8;
+  --muted:     #7a8f8a;
+  --muted-2:   #a0b3ae;
+
+  /* legacy */
+  --brand-900: #1a5446;
+  --brand-700: #2a6b5c;
+  --brand-50: #d4ece7;
+  --amber-kart: #c49a45;
 }
 
-body { background: var(--color-canvas); color: var(--color-ink); }
+/* ── Dark mode ───────────────────────────────────────────────────────────── */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --ink:       #e8dcc4;
+  --canvas:    #0e1f1b;
+  --surface:   #152420;
+  --surface-2: #1c2e29;
+  --line:      #2a3d37;
+  --muted:     #8aada6;
+  --muted-2:   #5d8278;
+
+  /* legacy remapped */
+  --brand-900: #4aac90;
+  --brand-700: #3a8a72;
+  --brand-50: #1a3530;
+  --amber-kart: #d4ae63;
+}
+
+/* ── Base styles ─────────────────────────────────────────────────────────── */
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-feature-settings: "kern", "liga", "calt";
+  -webkit-font-smoothing: antialiased;
+}
+
 button { cursor: pointer; }
-:focus-visible { outline: 3px solid var(--color-amber-kart); outline-offset: 2px; }
+
+:focus-visible {
+  outline: 2px solid var(--color-gold-500);
+  outline-offset: 2px;
+}
+
+/* Smooth transitions for theme switching */
+body, aside, header, .bg-surface, .bg-canvas {
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted-2); }
+
+/* ── Animations ──────────────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+.animate-fade-in  { animation: fadeIn  0.22s ease both; }
+.animate-slide-up { animation: slideUp 0.28s ease both; }
+.animate-pulse-soft { animation: pulse-soft 1.8s ease-in-out infinite; }
+
+/* skeleton loading */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--line) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 6px;
+}
+
+/* ── Utility overrides ───────────────────────────────────────────────────── */
+.glass {
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border: 1px solid var(--line);
+}
+
+/* Mobile tap highlight */
+* { -webkit-tap-highlight-color: transparent; }
+
+/* ── Print ───────────────────────────────────────────────────────────────── */
+@media print {
+  aside, header, .no-print { display: none !important; }
+}

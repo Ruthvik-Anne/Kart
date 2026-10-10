@@ -37,7 +37,7 @@ export default function SettingsPage() {
         <div role="radiogroup" aria-label="Theme" className="grid gap-3 sm:grid-cols-3">
           {OPTIONS.map(o => (
             <button key={o.id} type="button" role="radio" aria-checked={choice === o.id} onClick={() => pick(o.id)}
-              className={cx('rounded-xl border-2 p-4 text-left text-xs', choice === o.id ? 'border-forest-800' : 'border-line')}>
+              className={cx('rounded-xl border-2 p-4 text-left text-xs', choice === o.id ? 'border-brand-900' : 'border-line')}>
               <b className="block font-display text-base">{o.label}</b><span className="text-muted">{o.note}</span>
             </button>
           ))}

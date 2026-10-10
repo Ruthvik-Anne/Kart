@@ -37,7 +37,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <div className="grid h-64 place-items-center rounded-2xl bg-gradient-to-br from-xe9f1e7 to-xf8f4e9 text-8xl lg:h-80" aria-hidden>{p.icon}</div>
         <div>
-          <div className="text-[11px] font-extrabold uppercase tracking-wider text-x5d8369">{store.name}{store.open ? '' : ' · closed'}</div>
+          <div className="text-[11px] font-extrabold uppercase tracking-wider text-brand-700">{store.name}{store.open ? '' : ' · closed'}</div>
           <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">{p.name}</h1>
           <div className="mt-2 flex items-center gap-2 text-xs">
             {rating.count > 0 ? <><StarRating value={Math.round(rating.average)} /> <b>{rating.average.toFixed(1)}</b> <span className="text-muted">({rating.count} review{rating.count === 1 ? '' : 's'})</span></> : <span className="text-muted">No reviews yet</span>}

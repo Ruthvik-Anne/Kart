@@ -59,7 +59,7 @@ export default function TaskDetail({ params }: { params: Promise<{ id: string }>
 
   return (
     <>
-      <Link href="/tasks" className="mb-4 inline-block text-xs font-bold text-forest-800">← Task board</Link>
+      <Link href="/tasks" className="mb-4 inline-block text-xs font-bold text-brand-900">← Task board</Link>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <div className="grid content-start gap-5">
           <Card>
@@ -84,7 +84,7 @@ export default function TaskDetail({ params }: { params: Promise<{ id: string }>
               <h2 className="mb-2 font-display text-base font-bold">Linked workflow · {flow.title}</h2>
               <ol className="grid gap-1.5 text-xs">
                 {flow.taskIds.map(id => k.task(id)).filter((x): x is NonNullable<typeof x> => !!x).map(x => (
-                  <li key={x.id} className="flex items-center gap-2"><span className="grid h-5 w-5 place-items-center rounded-full bg-xeef1ed text-[10px] font-extrabold">{x.step}</span>
+                  <li key={x.id} className="flex items-center gap-2"><span className="grid h-5 w-5 place-items-center rounded-full bg-surface-2 text-[10px] font-extrabold">{x.step}</span>
                     {x.id === t.id ? <b>{x.title}</b> : <Link className="underline" href={'/tasks/' + x.id}>{x.title}</Link>}<span className="ml-auto"><Badge tone={STATUS_TONE[x.status]}>{statusLabel(x.status)}</Badge></span></li>
                 ))}
               </ol>
@@ -121,7 +121,7 @@ export default function TaskDetail({ params }: { params: Promise<{ id: string }>
             <Card>
               <h2 className="mb-3 font-display text-base font-bold">Reviews</h2>
               {theirReview && <div className="mb-3 rounded-xl bg-xf6f9f4 p-3 text-xs"><b>{reviewTarget} rated you</b> <StarRating value={theirReview.rating} />{theirReview.comment && <p className="mt-1">{theirReview.comment}</p>}</div>}
-              {myReview && <div className="rounded-xl bg-forest-100 p-3 text-xs"><b>Your review of {reviewTarget}</b> <StarRating value={myReview.rating} />{myReview.comment && <p className="mt-1">{myReview.comment}</p>}</div>}
+              {myReview && <div className="rounded-xl bg-brand-50 p-3 text-xs"><b>Your review of {reviewTarget}</b> <StarRating value={myReview.rating} />{myReview.comment && <p className="mt-1">{myReview.comment}</p>}</div>}
               {mayReview && (
                 <form className="grid gap-3" onSubmit={async e => { e.preventDefault(); const r = await act(kart => kart.reviewTask(me, t.id, stars, review), 'Thanks for your review'); if (r.ok) setReview(''); }}>
                   <div><div className="mb-1 text-[11px] font-extrabold text-x55715b">How was {reviewTarget}?</div><StarRating value={stars} onChange={setStars} /></div>
@@ -140,7 +140,7 @@ export default function TaskDetail({ params }: { params: Promise<{ id: string }>
                 const profile = k.profile(b.providerId);
                 const { net } = netPayout(b.amount, k.db.fees.taskFeeRate);
                 return (
-                  <div key={b.id} className={`rounded-xl border p-4 ${t.assigneeId === b.providerId ? 'border-forest-800 bg-forest-100' : 'border-line'}`}>
+                  <div key={b.id} className={`rounded-xl border p-4 ${t.assigneeId === b.providerId ? 'border-brand-900 bg-brand-50' : 'border-line'}`}>
                     <div className="flex flex-wrap items-center gap-2 text-xs">
                       <b>{nameOf(b.providerId)}{b.providerId === me.id ? ' (you)' : ''}</b>
                       <span className="text-muted">{profile ? `★ ${profile.rating.toFixed(1)} (${profile.ratingCount})` : 'New provider'}</span>
@@ -177,7 +177,7 @@ export default function TaskDetail({ params }: { params: Promise<{ id: string }>
                 <div role="tablist" aria-label="Bidders" className="mb-3 flex flex-wrap gap-1">
                   {threads.map(uid => (
                     <button key={uid} role="tab" aria-selected={currentBidder === uid} onClick={() => setActiveKey(`${t.id}:${uid}`)}
-                      className={`rounded-full px-3 py-1.5 text-[11px] font-bold ${currentBidder === uid ? 'bg-forest-800 text-white' : 'bg-xeef1ed'}`}>{nameOf(uid)}</button>
+                      className={`rounded-full px-3 py-1.5 text-[11px] font-bold ${currentBidder === uid ? 'bg-brand-900 text-white' : 'bg-surface-2'}`}>{nameOf(uid)}</button>
                   ))}
                 </div>
               )}

@@ -35,7 +35,7 @@ export default function Xerox() {
             <Field label="Sides"><select className={inputCls} value={f.duplex ? 'd' : 's'} onChange={e => setF({ ...f, duplex: e.target.value === 'd' })}><option value="s">Single-sided</option><option value="d">Double-sided</option></select></Field>
             <Field label="Binding"><select className={inputCls} value={f.spiral ? 'y' : 'n'} onChange={e => setF({ ...f, spiral: e.target.value === 'y' })}><option value="n">None</option><option value="y">Spiral (+30 KC)</option></select></Field>
             <Field label="Print shop"><select className={inputCls} value={f.shop} onChange={e => setF({ ...f, shop: e.target.value })}>{shops.map(s => <option key={s.id} value={s.id} disabled={!s.open}>{s.name}{s.open ? '' : ' (closed)'}</option>)}</select></Field>
-            <div className="flex items-center justify-between rounded-xl bg-forest-100 px-4 py-3 text-sm font-extrabold sm:col-span-2"><span>Estimate</span><span>{kc(estimate)}</span></div>
+            <div className="flex items-center justify-between rounded-xl bg-brand-50 px-4 py-3 text-sm font-extrabold sm:col-span-2"><span>Estimate</span><span>{kc(estimate)}</span></div>
             <Button type="submit" className="sm:col-span-2">Send print request · {kc(estimate)}</Button>
           </form>
         </Card>
@@ -45,7 +45,7 @@ export default function Xerox() {
             <div className="grid gap-3">
               {jobs.map(o => (
                 <Card key={o.id} className="!p-4">
-                  <div className="flex items-start justify-between gap-2"><div><div className="text-[10px] font-extrabold uppercase tracking-wider text-x5d8369">{o.id} · {when(o.ts)}</div><div className="mt-1 text-xs font-bold">{o.title}</div><div className="text-[11px] text-muted">{k.store(o.storeId)?.name} · {kc(o.amount)}</div><AttachmentList files={o.files} /></div><Badge tone={o.status === 'Cancelled' ? 'red' : o.status === 'Ready' ? 'amber' : 'green'}>{o.status}</Badge></div>
+                  <div className="flex items-start justify-between gap-2"><div><div className="text-[10px] font-extrabold uppercase tracking-wider text-brand-700">{o.id} · {when(o.ts)}</div><div className="mt-1 text-xs font-bold">{o.title}</div><div className="text-[11px] text-muted">{k.store(o.storeId)?.name} · {kc(o.amount)}</div><AttachmentList files={o.files} /></div><Badge tone={o.status === 'Cancelled' ? 'red' : o.status === 'Ready' ? 'amber' : 'green'}>{o.status}</Badge></div>
                 </Card>
               ))}
             </div>

@@ -24,7 +24,7 @@ export function VendorOrders({ print }: { print?: boolean }) {
             <Card key={o.id} className="!p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-x5d8369">{o.id} · {when(o.ts)} · {k.user(o.buyerId)?.name}</div>
+                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-brand-700">{o.id} · {when(o.ts)} · {k.user(o.buyerId)?.name}</div>
                   <h3 className="mt-1 text-sm font-bold">{o.title}</h3>
                   <div className="text-[11px] text-muted">{kc(o.amount)}{o.window ? ` · pickup ${o.window}` : ''}</div>
                   <AttachmentList files={o.files} />

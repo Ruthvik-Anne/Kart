@@ -170,7 +170,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       {children}
       <div aria-live="polite" className="fixed bottom-5 right-5 z-50 grid gap-2">
         {toasts.map(t => (
-          <div key={t.id} role="status" className={`rounded-xl px-4 py-3 text-xs font-bold text-white shadow-lg ${t.tone === 'error' ? 'bg-red-700' : 'bg-forest-800'}`}>{t.text}</div>
+          <div key={t.id} role="status" className={`rounded-xl px-4 py-3 text-xs font-bold text-white shadow-lg ${t.tone === 'error' ? 'bg-red-700' : 'bg-brand-900'}`}>{t.text}</div>
         ))}
       </div>
     </StoreCtx.Provider>
