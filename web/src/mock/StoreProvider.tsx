@@ -21,6 +21,7 @@ interface Ctx {
   mode: 'demo' | 'server';
   signIn: (userId: string) => void;
   login: (username: string, password: string) => Promise<string | null>;
+  refresh: () => Promise<void>;
   signOut: () => void;
   reset: () => void;
   toasts: Toast[];
@@ -164,7 +165,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     toast('Demo data reset', 'ok');
   }, [persist, toast]);
 
-  const value: Ctx = { ready: ready && serverChecked, mode, k: kart.current, me, version, act, signIn, login, signOut, reset, toasts };
+  const refresh = useCallback(async () => {
+    if (mode !== 'server') { setVersion(v => v + 1); return; }
+    const response = await fetch('/api/session', { cache: 'no-store' });
+    if (!response.ok) throw new Error('Could not refresh campus state.');
+    const data = await response.json() as { user?: User | null; db?: Db };
+    if (!data.user || !data.db) throw new Error('Your session expired.');
+    adopt(data.db, data.user);
+  }, [mode, adopt]);
+
+  const value: Ctx = { ready: ready && serverChecked, mode, k: kart.current, me, version, act, signIn, login, refresh, signOut, reset, toasts };
   return (
     <StoreCtx.Provider value={value}>
       {children}

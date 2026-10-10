@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   if (typeof username !== 'string' || typeof password !== 'string') return json({ ok: false, error: 'Enter your username and password.' }, 400);
   const token = await authenticate(username, password, CAMPUS);
   if (!token) return json({ ok: false, error: 'Wrong username or password, or the account is temporarily locked.' }, 401);
-  await setSessionCookie(token);
+  await setSessionCookie(token.token);
   return json({ ok: true });
 }
 

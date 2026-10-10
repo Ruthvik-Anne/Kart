@@ -1,4 +1,5 @@
 import hashlib
+from contextlib import closing
 import sqlite3
 import tempfile
 import unittest
@@ -28,7 +29,7 @@ class BackupTests(unittest.TestCase):
             result = create_backup(root / "backup", root / "source.db", uploads)
             self.assertEqual(result["uploads"][0]["sha256"], hashlib.sha256(pdf).hexdigest())
             self.assertEqual((root / "backup/uploads/job.pdf").read_bytes(), pdf)
-            with sqlite3.connect(root / "backup/kart.db") as db:
+            with closing(sqlite3.connect(root / "backup/kart.db")) as db:
                 self.assertEqual(db.execute("SELECT COUNT(*) FROM print_jobs").fetchone()[0], 1)
             (uploads / "job.pdf").write_bytes(b"corrupt")
             with self.assertRaises(ValueError):

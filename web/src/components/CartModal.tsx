@@ -11,6 +11,8 @@ export function CartModal() {
   const { k, me, act } = useKart();
   const cart = useCart();
   const [window, setWindow] = useState(WINDOWS[0]);
+  const [fulfillment, setFulfillment] = useState<'pickup' | 'delivery'>('pickup');
+  const [deliveryDetails, setDeliveryDetails] = useState('');
   const [code, setCode] = useState('');
   const [applied, setApplied] = useState<{ code: string; discount: number; label: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -43,7 +45,8 @@ export function CartModal() {
               e.preventDefault();
               setBusy(true);
               const r = await act(
-                (kart, user) => kart.checkout(user, cart.lines, window, live?.ok ? live.code : undefined),
+                (kart, user) => kart.checkout(user, cart.lines, window, live?.ok ? live.code : undefined,
+                  fulfillment, deliveryDetails),
                 'Order placed! 🎉',
               );
               setBusy(false);
@@ -91,12 +94,26 @@ export function CartModal() {
               ))}
             </div>
 
+            {/* Fulfilment */}
+            <Field label="Receive your order">
+              <select className={inputCls} value={fulfillment} onChange={e => setFulfillment(e.target.value as 'pickup' | 'delivery')}>
+                <option value="pickup">Collect from shop</option>
+                <option value="delivery">Campus delivery</option>
+              </select>
+            </Field>
+
             {/* Pickup window */}
-            <Field label="Pickup window">
+            <Field label="Preferred time">
               <select className={inputCls} value={window} onChange={e => setWindow(e.target.value)}>
                 {WINDOWS.map(w => <option key={w}>{w}</option>)}
               </select>
             </Field>
+
+            {fulfillment === 'delivery' && (
+              <Field label="Delivery location and instructions">
+                <textarea required maxLength={200} className={inputCls} value={deliveryDetails} onChange={e => setDeliveryDetails(e.target.value)} placeholder="Building, room and landmark" />
+              </Field>
+            )}
 
             {/* Promo code */}
             <div>

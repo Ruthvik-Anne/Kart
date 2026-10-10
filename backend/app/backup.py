@@ -4,6 +4,7 @@ Run inside the single backend instance against persistent storage. Encrypt and s
 result off host using the operator's backup system; this command does not do that.
 """
 import argparse
+from contextlib import closing
 import hashlib
 import json
 import os
@@ -31,12 +32,12 @@ def create_backup(destination: Path, db_path: Path, upload_dir: Path) -> dict:
     temporary.chmod(0o700)
     try:
         snapshot = temporary / "kart.db"
-        with sqlite3.connect(db_path) as source, sqlite3.connect(snapshot) as target:
+        with closing(sqlite3.connect(db_path)) as source, closing(sqlite3.connect(snapshot)) as target:
             source.backup(target)
         snapshot.chmod(0o600)
         copied = []
         (temporary / "uploads").mkdir(mode=0o700)
-        with sqlite3.connect(snapshot) as db:
+        with closing(sqlite3.connect(snapshot)) as db:
             for job_id, file_path, expected in db.execute("SELECT id,file_path,file_sha256 FROM print_jobs"):
                 source = Path(file_path)
                 if source.parent.resolve() != upload_dir.resolve() or source.name != job_id + ".pdf" or source.is_symlink():

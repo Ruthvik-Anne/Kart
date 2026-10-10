@@ -229,7 +229,8 @@ describe('reviews and reputation', () => {
     k.checkout(U('u-alex'), [{ productId: 'f1', qty: 1 }], '');
     const id = k.db.orders[0].id;
     expect(k.reviewOrder(U('u-alex'), id, 5, '').ok).toBe(false); // not collected yet
-    for (let i = 0; i < 3; i++) k.advanceOrder(U('v-bites'), id);
+    for (let i = 0; i < 2; i++) k.advanceOrder(U('v-bites'), id);
+    expect(k.verifyHandover(U('v-bites'), id, k.db.orders[0].handoverCode!).ok).toBe(true);
     expect(k.reviewOrder(U('u-meera'), id, 5, '').ok).toBe(false);
     expect(k.reviewOrder(U('u-alex'), id, 4, 'Quick').ok).toBe(true);
     expect(k.reviewOrder(U('u-alex'), id, 5, '').ok).toBe(false);

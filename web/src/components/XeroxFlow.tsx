@@ -10,7 +10,7 @@ import { BINDING_COST, LAMINATION_COST, PAPER_RATES, type Binding, type Laminati
 const WINDOWS = ['As soon as ready', '12:30 PM - 1:00 PM', '1:00 PM - 1:30 PM', '4:00 PM - 4:30 PM'];
 
 export function XeroxFlow() {
-  const { k, me, refresh } = useKart();
+  const { k, me, refresh, mode, act } = useKart();
   const shops = k.db.stores.filter(s => s.type === 'xerox');
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
@@ -31,13 +31,21 @@ export function XeroxFlow() {
     if (!files.length) { setError('Attach at least one document.'); return; }
     setBusy(true); setError('');
     try {
-      const body = new FormData();
-      Object.entries({ ...f, shop: f.shop || shops[0]?.id || '' }).forEach(([key, value]) => body.set(key, String(value)));
-      files.forEach(file => body.append('files', file));
-      const response = await fetch('/api/print', { method: 'POST', body });
-      const result = await response.json() as { ok?: boolean; orderId?: string; code?: string; error?: string };
-      if (!response.ok || !result.ok || !result.orderId || !result.code) throw new Error(result.error || 'Could not send print request.');
-      await refresh();
+      let result: { ok?: boolean; orderId?: string; code?: string; error?: string };
+      if (mode === 'demo') {
+        result = await act((kart, user) => kart.printRequest(user, f.shop || shops[0]?.id || '', {
+          ...f, spiral: f.binding === 'spiral', files: files.map(file => ({ name: file.name, size: file.size })),
+        }), 'Print request placed');
+      } else {
+        const body = new FormData();
+        Object.entries({ ...f, shop: f.shop || shops[0]?.id || '' }).forEach(([key, value]) => body.set(key, String(value)));
+        files.forEach(file => body.append('files', file));
+        const response = await fetch('/api/print', { method: 'POST', body });
+        result = await response.json() as typeof result;
+        if (!response.ok) throw new Error(result.error || 'Could not send print request.');
+        await refresh();
+      }
+      if (!result.ok || !result.orderId || !result.code) throw new Error(result.error || 'Could not send print request.');
       setPlaced({ id: result.orderId, code: result.code });
       setFiles([]);
       setF(current => ({ ...current, doc: '', notes: '' }));

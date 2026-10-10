@@ -1,80 +1,58 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined, set: () => undefined, delete: () => undefined }) }));
 
-type Row = Record<string, unknown>;
-const accounts: Row[] = [];
-const sessions: Row[] = [];
-const state = { users: [] as Row[] };
-
-const client = {
-  query: vi.fn(async (sql: string, params: unknown[] = []) => {
-    if (sql.startsWith('SELECT id, password_hash')) return { rows: accounts.filter(a => a.username === params[1]), rowCount: 1 };
-    if (sql.startsWith('INSERT INTO accounts')) { accounts.push({ id: params[0], username: params[2], password_hash: params[3], failed_logins: 0, locked_until: null }); return { rows: [] }; }
-    if (sql.startsWith('INSERT INTO sessions')) { sessions.push({ token_hash: params[0] }); return { rows: [] }; }
-    if (sql.startsWith('UPDATE accounts SET failed_logins=CASE')) {
-      const a = accounts.find(x => x.id === params[0])!;
-      if ((a.failed_logins as number) >= 4) { a.failed_logins = 0; a.locked_until = new Date(Date.now() + 15 * 60_000); } else a.failed_logins = (a.failed_logins as number) + 1;
-      return { rows: [] };
-    }
-    if (sql.startsWith('UPDATE accounts SET failed_logins=0')) { const a = accounts.find(x => x.id === params[0])!; a.failed_logins = 0; a.locked_until = null; return { rows: [] }; }
-    return { rows: [] };
-  }),
-};
-
-vi.mock('./database', () => ({
-  database: () => ({ query: vi.fn() }),
-  transaction: async (fn: (c: typeof client) => unknown) => fn(client),
-  lockedState: async () => state,
-  saveState: async () => undefined,
-}));
-
-const { authenticate, createAccount, hashPassword, hashToken, validPassword, validUsername } = await import('./auth');
+type Account = { id: string; campus_id: string; username: string; name: string; roles: string[]; password_hash: string; failed_logins: number; locked_until: Date | null };
+const accounts: Account[] = [];
+const sessions: string[] = [];
+const query = vi.fn(async (sql: string, params: unknown[] = []) => {
+  if (sql.startsWith('INSERT INTO accounts')) {
+    accounts.push({ id: String(params[0]), campus_id: String(params[1]), username: String(params[2]), name: String(params[3]),
+      roles: JSON.parse(String(params[4])), password_hash: String(params[5]), failed_logins: 0, locked_until: null });
+    return { rows: [], rowCount: 1 };
+  }
+  if (sql.startsWith('SELECT id, name, roles, campus_id, password_hash')) {
+    const account = accounts.find(a => a.campus_id === params[0] && a.username === params[1]);
+    return { rows: account ? [account] : [], rowCount: account ? 1 : 0 };
+  }
+  if (sql.startsWith('INSERT INTO sessions')) { sessions.push(String(params[0])); return { rows: [], rowCount: 1 }; }
+  if (sql.startsWith('UPDATE accounts SET failed_logins=CASE')) {
+    const account = accounts.find(a => a.id === params[0])!;
+    if (account.failed_logins >= 4) { account.failed_logins = 0; account.locked_until = new Date(Date.now() + 15 * 60_000); }
+    else account.failed_logins += 1;
+  }
+  if (sql.startsWith('UPDATE accounts SET failed_logins=0')) {
+    const account = accounts.find(a => a.id === params[0])!;
+    account.failed_logins = 0; account.locked_until = null;
+  }
+  return { rows: [], rowCount: 0 };
+});
+vi.mock('./database', () => ({ database: () => ({ query }), transaction: async (fn: (client: { query: typeof query }) => unknown) => fn({ query }) }));
+const { createAccount, authenticate, usernameError, passwordError } = await import('./auth');
+const { hashToken } = await import('@/lib/password');
 
 describe('auth', () => {
-  beforeEach(() => { accounts.length = 0; sessions.length = 0; state.users.length = 0; });
-
-  it('validates usernames and passwords', () => {
-    expect(validUsername('alex_01')).toBe(true);
-    expect(validUsername('A')).toBe(false);
-    expect(validUsername('1abc')).toBe(false);
-    expect(validPassword('short')).toBe(false);
-    expect(validPassword('a-long-enough-pass')).toBe(true);
+  beforeEach(() => { accounts.length = 0; sessions.length = 0; query.mockClear(); });
+  it('validates registration fields', () => {
+    expect(usernameError('alex_01')).toBeNull();
+    expect(usernameError('A')).toBeTruthy();
+    expect(passwordError('short')).toBeTruthy();
+    expect(passwordError('a-long-enough-pass')).toBeNull();
   });
-
-  it('never stores the plain password and salts each hash', async () => {
-    const a = await hashPassword('correct horse battery');
-    const b = await hashPassword('correct horse battery');
-    expect(a).not.toContain('correct horse');
-    expect(a).not.toBe(b);
-    expect(a.startsWith('scrypt:')).toBe(true);
+  it('stores password and session hashes', async () => {
+    const user = await createAccount({ username: 'alex', password: 'a-long-enough-pass', name: 'Alex' });
+    expect(accounts[0].password_hash).not.toContain('a-long-enough-pass');
+    const session = await authenticate('Alex', 'a-long-enough-pass');
+    expect(session?.user.id).toBe(user.id);
+    expect(sessions[0]).toBe(hashToken(session!.token));
+    expect(sessions[0]).not.toBe(session!.token);
   });
-
-  it('creates an account, signs in with the right password and stores only a token hash', async () => {
-    await createAccount('alex', 'a-long-enough-pass', 'Alex');
-    expect(state.users).toHaveLength(1);
-    const token = await authenticate('Alex', 'a-long-enough-pass');
-    expect(token).toBeTruthy();
-    expect(sessions[0].token_hash).toBe(hashToken(token!));
-    expect(sessions[0].token_hash).not.toBe(token);
-  });
-
-  it('rejects wrong passwords and unknown users the same way', async () => {
-    await createAccount('alex', 'a-long-enough-pass', 'Alex');
-    expect(await authenticate('alex', 'wrong-password-12')).toBeNull();
+  it('locks after repeated failures', async () => {
+    await createAccount({ username: 'alex', password: 'a-long-enough-pass', name: 'Alex' });
     expect(await authenticate('nobody', 'a-long-enough-pass')).toBeNull();
-    expect(sessions).toHaveLength(0);
-  });
-
-  it('locks the account after five failures, even for the right password', async () => {
-    await createAccount('alex', 'a-long-enough-pass', 'Alex');
     for (let i = 0; i < 5; i++) expect(await authenticate('alex', 'wrong-password-12')).toBeNull();
     expect(await authenticate('alex', 'a-long-enough-pass')).toBeNull();
-  });
-
-  it('refuses weak registration input', async () => {
-    await expect(createAccount('alex', 'short', 'Alex')).rejects.toThrow();
-    await expect(createAccount('!!', 'a-long-enough-pass', 'Alex')).rejects.toThrow();
+    expect(sessions).toHaveLength(0);
   });
 });

@@ -6,7 +6,7 @@ import * as rules from '@/ledger/rules';
 import { DEFAULT_FEES, type Fees } from '@/ledger/rules';
 import { appendBlock, type Block } from '@/chain/chain';
 import { promoDiscount, splitDiscount, normalizeCode, validatePromoDef, type Promo } from '@/lib/promo';
-import { cleanAttachments, type Attachment, type FileLike } from '@/lib/attachments';
+import { cleanAttachments, MAX_FILES, type Attachment, type FileLike } from '@/lib/attachments';
 import { next, milestoneRule, type TaskEvent, type TaskStatus } from '@/domain/taskMachine';
 import {
   DEFAULT_MATCH_WEIGHTS, DEFAULT_PRIORITY_WEIGHTS, matchScore, priorityScore,
@@ -16,15 +16,29 @@ import {
 export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 const fail = (error: string): { ok: false; error: string } => ({ ok: false, error });
 const HOUR = 3_600_000;
+const newCode = () => crypto.randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase();
 
 export interface Store { id: string; name: string; type: StoreType; vendorId: string; open: boolean }
 export interface Product { id: string; storeId: string; name: string; price: number; icon: string; desc: string; stock: number; category: 'food' | 'shop'; mrp?: number }
 export interface CartLine { productId: string; qty: number }
-export type OrderStatus = 'Placed' | 'Preparing' | 'Ready' | 'Collected' | 'Cancelled';
+export type OrderStatus = 'Placed' | 'Preparing' | 'Ready' | 'Out for delivery' | 'Collected' | 'Cancelled';
 export interface Order {
   id: string; buyerId: string; storeId: string; kind: 'food' | 'shop' | 'print'; title: string;
   amount: number; status: OrderStatus; ts: number; window?: string; files?: Attachment[];
   productIds?: string[]; discount?: number; promoCode?: string;
+  fulfillment?: 'pickup' | 'delivery'; deliveryDetails?: string; handoverCode?: string;
+  paymentMethod?: 'wallet' | 'pay_on_handover'; items?: CartLine[]; runnerId?: string;
+}
+export type PaperSize = 'A4' | 'A3' | 'Legal' | 'Letter';
+export type Binding = 'none' | 'spiral' | 'staple' | 'comb';
+export type Lamination = 'none' | 'normal' | 'id';
+export const PAPER_RATES: Record<PaperSize, number> = { A4: 1, Letter: 1.25, Legal: 1.25, A3: 1.75 };
+export const BINDING_COST: Record<Binding, number> = { none: 0, staple: 5, comb: 25, spiral: 30 };
+export const LAMINATION_COST: Record<Lamination, number> = { none: 0, normal: 15, id: 25 };
+export interface PrintSpec {
+  doc: string; pages: number; copies: number; color: boolean; duplex: boolean; spiral: boolean;
+  file?: FileLike; files?: FileLike[]; paper?: PaperSize; binding?: Binding; lamination?: Lamination;
+  notes?: string; window?: string; fulfillment?: 'pickup' | 'delivery'; deliveryDetails?: string;
 }
 export interface Milestone {
   id: string; title: string; share: number; amount: number; status: 'pending' | 'submitted' | 'released';
@@ -168,9 +182,12 @@ export class Kart {
     return { ok: true, discount: r.discount, label: r.promo.label, code: r.promo.code };
   }
 
-  checkout(actor: User, lines: CartLine[], window: string, promoCode?: string): Result<{ orderIds: string[]; discount: number }> {
+  checkout(actor: User, lines: CartLine[], window: string, promoCode?: string,
+    fulfillment: 'pickup' | 'delivery' = 'pickup', deliveryDetails = ''): Result<{ orderIds: string[]; discount: number }> {
     if (!can(actor, 'order:create')) return fail('Not allowed.');
     if (!lines.length) return fail('Your cart is empty.');
+    if (fulfillment !== 'pickup' && fulfillment !== 'delivery') return fail('Choose pickup or delivery.');
+    if (fulfillment === 'delivery' && (!deliveryDetails.trim() || deliveryDetails.length > 200)) return fail('Enter delivery instructions (up to 200 characters).');
     const byStore = new Map<string, { product: Product; qty: number }[]>();
     for (const l of lines) {
       const product = this.db.products.find(p => p.id === l.productId);
@@ -198,6 +215,9 @@ export class Kart {
       this.db.orders.unshift({
         id, buyerId: actor.id, storeId, kind: items[0].product.category, amount, status: 'Placed', ts: Date.now(), window,
         productIds: items.map(l => l.product.id), discount: discount || undefined, promoCode: discount && pr.promo ? pr.promo.code : undefined,
+        fulfillment, deliveryDetails: fulfillment === 'delivery' ? deliveryDetails.trim() : undefined,
+        paymentMethod: 'wallet', handoverCode: newCode(),
+        items: items.map(l => ({ productId: l.product.id, qty: l.qty })),
         title: items.map(l => `${l.product.name}${l.qty > 1 ? ` × ${l.qty}` : ''}`).join(', '),
       });
       this.notify(store.vendorId, `New order ${id} · ${amount} KC`, '/vendor/queue');
@@ -206,36 +226,99 @@ export class Kart {
     return { ok: true, orderIds, discount: pr.discount };
   }
 
-  printRequest(actor: User, storeId: string, p: { doc: string; pages: number; copies: number; color: boolean; duplex: boolean; spiral: boolean; file?: FileLike }): Result<{ orderId: string }> {
+  printRequest(actor: User, storeId: string, p: PrintSpec): Result<{ orderId: string; code: string }> {
     if (!can(actor, 'print:create')) return fail('Not allowed.');
     const store = this.store(storeId);
     if (!store || store.type !== 'xerox' || !store.open) return fail('Choose an open print shop.');
-    const att = cleanAttachments(p.file ? [p.file] : []);
+    const att = cleanAttachments([...(p.files ?? []), ...(p.file ? [p.file] : [])]);
     if (!att.ok) return fail(att.error);
     const doc = p.doc.trim();
     if (!doc || doc.length > 80) return fail('Enter a document name (up to 80 characters).');
     if (![p.pages, p.copies].every(Number.isInteger) || p.pages < 1 || p.pages > 500 || p.copies < 1 || p.copies > 20) return fail('Pages 1-500, copies 1-20.');
     const sheets = p.duplex ? Math.ceil(p.pages / 2) : p.pages;
-    const amount = sheets * p.copies * (p.color ? 8 : 2) + (p.spiral ? 30 : 0);
+    const paper = p.paper ?? 'A4';
+    const binding = p.binding ?? (p.spiral ? 'spiral' : 'none');
+    const lamination = p.lamination ?? 'none';
+    if (!(paper in PAPER_RATES) || !(binding in BINDING_COST) || !(lamination in LAMINATION_COST)) return fail('Choose valid print options.');
+    const fulfillment = p.fulfillment ?? 'pickup';
+    if (fulfillment === 'delivery' && (!p.deliveryDetails?.trim() || p.deliveryDetails.length > 200)) return fail('Enter delivery instructions.');
+    if (p.window && p.window.length > 80) return fail('Choose a pickup or delivery time.');
+    if ((p.notes ?? '').length > 300) return fail('Keep print instructions under 300 characters.');
+    const amount = Math.round(sheets * p.copies * (p.color ? 8 : 2) * PAPER_RATES[paper]) + BINDING_COST[binding] + LAMINATION_COST[lamination];
     const id = this.id('PRT');
+    const handoverCode = newCode();
     const err = this.post(rules.checkout(id, actor.id, store.vendorId, amount, this.db.fees));
     if (err) return fail(err);
     this.db.orders.unshift({ id, buyerId: actor.id, storeId, kind: 'print', amount, status: 'Placed', ts: Date.now(),
       files: att.files.map(f => ({ ...f, id: this.id('F') })),
+      window: p.window, fulfillment, deliveryDetails: fulfillment === 'delivery' ? p.deliveryDetails?.trim() : undefined,
+      paymentMethod: 'wallet', handoverCode,
       title: `Print: ${doc} (${p.pages}p × ${p.copies}${p.color ? ', colour' : ''}${p.duplex ? ', duplex' : ''}${p.spiral ? ', spiral' : ''})` });
     this.notify(store.vendorId, `New print job ${id}`, '/vendor/print-queue');
-    return { ok: true, orderId: id };
+    return { ok: true, orderId: id, code: handoverCode };
+  }
+
+  placePrintOrder(actor: User, storeId: string, p: PrintSpec, files: Attachment[]): Result<{ orderId: string; code: string }> {
+    if (!files.length || files.length > MAX_FILES) return fail('Attach at least one document.');
+    const result = this.printRequest(actor, storeId, { ...p, files: [] });
+    if (!result.ok) return result;
+    const order = this.db.orders.find(o => o.id === result.orderId)!;
+    order.files = files;
+    return result;
   }
 
   advanceOrder(actor: User, orderId: string): Result {
     const o = this.db.orders.find(x => x.id === orderId);
     if (!o) return fail('Order not found.');
     if (!can(actor, 'store:orders:update', { storeId: o.storeId })) return fail('This order belongs to another store.');
+    if (o.status === 'Out for delivery') return fail('The delivery runner completes this order with the customer code.');
     const flow: OrderStatus[] = ['Placed', 'Preparing', 'Ready', 'Collected'];
     const i = flow.indexOf(o.status);
     if (i < 0 || i === flow.length - 1) return fail('Order cannot advance.');
+    if (o.status === 'Ready' && o.handoverCode) return fail('Verify the handover code to complete this order.');
     o.status = flow[i + 1];
     this.notify(o.buyerId, `Order ${o.id} is now ${o.status.toLowerCase()}`, '/orders');
+    return { ok: true };
+  }
+
+  verifyHandover(actor: User, orderId: string, code: string): Result {
+    const o = this.db.orders.find(x => x.id === orderId);
+    if (!o || !can(actor, 'store:orders:update', { storeId: o.storeId })) return fail('Order not found.');
+    if (o.status !== 'Ready' || o.fulfillment === 'delivery') return fail('This order is not ready for pickup.');
+    if (!o.handoverCode || code.trim().toUpperCase() !== o.handoverCode) return fail('The handover code does not match.');
+    o.status = 'Collected';
+    this.notify(o.buyerId, `Order ${o.id} was handed over`, '/orders');
+    return { ok: true };
+  }
+
+  acceptDelivery(actor: User, orderId: string): Result {
+    if (!can(actor, 'order:deliver')) return fail('Not allowed.');
+    const o = this.db.orders.find(x => x.id === orderId);
+    if (!o || o.fulfillment !== 'delivery' || o.status !== 'Ready') return fail('Delivery is not ready.');
+    if (o.runnerId || o.buyerId === actor.id) return fail('This delivery is unavailable.');
+    o.runnerId = actor.id;
+    this.notify(o.buyerId, `${actor.name} is collecting order ${o.id}`, '/orders');
+    this.notify(this.store(o.storeId)!.vendorId, `${actor.name} will collect order ${o.id}`, '/vendor/queue');
+    return { ok: true };
+  }
+
+  handoverToRunner(actor: User, orderId: string): Result {
+    const o = this.db.orders.find(x => x.id === orderId);
+    if (!o || !can(actor, 'store:orders:update', { storeId: o.storeId })) return fail('Order not found.');
+    if (o.status !== 'Ready' || o.fulfillment !== 'delivery' || !o.runnerId) return fail('Waiting for a runner to accept this order.');
+    o.status = 'Out for delivery';
+    this.notify(o.runnerId, `Collect order ${o.id} from ${this.store(o.storeId)!.name}`, '/delivery');
+    this.notify(o.buyerId, `Order ${o.id} is on its way`, '/orders');
+    return { ok: true };
+  }
+
+  deliverOrder(actor: User, orderId: string, code: string): Result {
+    if (!can(actor, 'order:deliver')) return fail('Not allowed.');
+    const o = this.db.orders.find(x => x.id === orderId);
+    if (!o || o.runnerId !== actor.id || o.status !== 'Out for delivery') return fail('Collect this order from the shop first.');
+    if (!o.handoverCode || code.trim().toUpperCase() !== o.handoverCode) return fail('The handover code does not match.');
+    o.status = 'Collected';
+    this.notify(o.buyerId, `Order ${o.id} was delivered`, '/orders');
     return { ok: true };
   }
 
@@ -243,6 +326,10 @@ export class Kart {
     const o = this.db.orders.find(x => x.id === orderId);
     if (!o || !can(actor, 'order:view:own', { ownerId: o.buyerId })) return fail('Order not found.');
     if (o.status !== 'Placed') return fail('Only orders that have not started can be cancelled.');
+    for (const item of o.items ?? []) {
+      const product = this.db.products.find(p => p.id === item.productId);
+      if (product) product.stock += item.qty;
+    }
     const store = this.store(o.storeId)!;
     const err = this.post(rules.orderRefund(o.id, o.buyerId, store.vendorId, o.amount, this.db.fees, o.discount ?? 0));
     if (err) return fail(err);
@@ -1155,4 +1242,15 @@ export function seed(now = Date.now()): Db {
   for (const id of ['u-alex', 'u-riya', 'u-nikhil', 'u-meera']) k.topUp(users.find(u => u.id === id)!, 2500);
   // Demo balances are simulated; no real money is involved until the PPI partner is connected.
   return k.db;
+}
+
+/** Blank campus state for authenticated installations. */
+export function emptyState(): Db {
+  return {
+    promos: [], promoUses: [], wishlist: [], reviews: [], workflows: [], listings: [],
+    events: [], tickets: [], vendorApps: [], users: [], stores: [], products: [],
+    orders: [], tasks: [], messages: [], profiles: [], services: [], notifications: [],
+    audit: [], verifications: [], entries: [], chain: [], fees: { ...DEFAULT_FEES },
+    priorityWeights: { ...DEFAULT_PRIORITY_WEIGHTS }, matchWeights: { ...DEFAULT_MATCH_WEIGHTS }, seq: 0,
+  };
 }

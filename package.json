@@ -7,7 +7,7 @@
     "build": "npm --prefix web run build",
     "start": "npm --prefix web run start",
     "lint": "npm --prefix web run lint",
-    "test": "npm --prefix web test",
+    "test": "node smoke-test.mjs && npm --prefix web test",
     "test:e2e": "npm --prefix web run test:e2e",
     "install:web": "npm --prefix web install"
   }

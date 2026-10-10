@@ -99,14 +99,16 @@ describe('product reviews', () => {
   const collect = (productId: string, storeVendor: string) => {
     k.checkout(U('u-alex'), [{ productId, qty: 1 }], '');
     const id = k.db.orders[0].id;
-    for (let i = 0; i < 3; i++) k.advanceOrder(U(storeVendor), id);
+    for (let i = 0; i < 2; i++) k.advanceOrder(U(storeVendor), id);
+    expect(k.verifyHandover(U(storeVendor), id, k.db.orders[0].handoverCode!).ok).toBe(true);
   };
   it('only verified buyers who collected the item can review, and re-reviewing edits', () => {
     expect(k.reviewProduct(U('u-alex'), 'f1', 5, '').ok).toBe(false); // never bought
     k.checkout(U('u-alex'), [{ productId: 'f1', qty: 1 }], '');
     expect(k.reviewProduct(U('u-alex'), 'f1', 5, '').ok).toBe(false); // not collected yet
     const id = k.db.orders[0].id;
-    for (let i = 0; i < 3; i++) k.advanceOrder(U('v-bites'), id);
+    for (let i = 0; i < 2; i++) k.advanceOrder(U('v-bites'), id);
+    expect(k.verifyHandover(U('v-bites'), id, k.db.orders[0].handoverCode!).ok).toBe(true);
     expect(k.reviewProduct(U('u-meera'), 'f1', 5, '').ok).toBe(false);
     expect(k.reviewProduct(U('u-alex'), 'f1', 0, '').ok).toBe(false);
     expect(k.reviewProduct(U('u-alex'), 'f1', 4, 'Crisp').ok).toBe(true);
@@ -118,7 +120,8 @@ describe('product reviews', () => {
     collect('f1', 'v-bites');
     k.reviewProduct(U('u-alex'), 'f1', 5, '');
     k.checkout(U('u-meera'), [{ productId: 'f1', qty: 1 }], '');
-    for (let i = 0; i < 3; i++) k.advanceOrder(U('v-bites'), k.db.orders[0].id);
+    for (let i = 0; i < 2; i++) k.advanceOrder(U('v-bites'), k.db.orders[0].id);
+    expect(k.verifyHandover(U('v-bites'), k.db.orders[0].id, k.db.orders[0].handoverCode!).ok).toBe(true);
     k.reviewProduct(U('u-meera'), 'f1', 2, '');
     expect(k.productRating('f1')).toEqual({ count: 2, average: 3.5 });
     expect(k.productRating('f2')).toEqual({ count: 0, average: 0 });
